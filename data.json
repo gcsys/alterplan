@@ -46,10 +46,9 @@
     },
     {
       "id": "mwjesy7n",
-      "kind": "anniv",
+      "kind": "trail",
       "title": "Sortie trail avec Gaël",
-      "date": "2026-11-28",
-      "year": 2026
+      "date": "2026-11-28"
     },
     {
       "id": "mwjei3r2",
@@ -70,5 +69,5 @@
       "date": "2027-03-12"
     }
   ],
-  "updated": "2026-11-16T15:19:28.746Z"
+  "updated": "2026-11-16T15:19:40.270Z"
 }
