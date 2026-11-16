@@ -36,8 +36,9 @@
   --font-display: "Barlow Condensed", "Inter", system-ui, sans-serif;
   color-scheme: light;
 }
+/* Thème : système par défaut, ou forcé par data-theme (clair / sombre) sur <html>. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #101312;
     --surface: #181c1b;
     --surface-2: #1d2220;
@@ -54,6 +55,23 @@
     --shadow: 0 1px 3px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #101312;
+  --surface: #181c1b;
+  --surface-2: #1d2220;
+  --surface-3: #252b29;
+  --text: #ecefed;
+  --text-2: #c5ccc9;
+  --muted: #8e9894;
+  --border: #2a302e;
+  --border-strong: #3a423f;
+  --pa-soft: color-mix(in srgb, var(--pa) 26%, var(--surface));
+  --pb-soft: color-mix(in srgb, var(--pb) 26%, var(--surface));
+  --pa-ink: color-mix(in srgb, var(--pa) 70%, #fff);
+  --pb-ink: color-mix(in srgb, var(--pb) 70%, #fff);
+  --shadow: 0 1px 3px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -386,6 +404,10 @@ code { font-size: .85em; background: var(--surface-3); padding: 1px 5px; border-
 .who-pick button.on.wp-x { background: var(--text); border-color: var(--text); color: var(--surface); }
 .exc-form label.check { display: flex; flex-direction: row; align-items: center; gap: 8px; align-self: end; min-height: 38px; color: var(--text-2); font-size: .86rem; }
 .tiles { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+
+.theme-seg { width: fit-content; }
+.theme-seg button { display: inline-flex; align-items: center; gap: 6px; }
+.theme-seg button svg { width: 16px; height: 16px; }
 
 .foot { text-align: center; color: var(--muted); font-size: .8rem; padding-top: 8px; }
 .foot p { margin: 0; }

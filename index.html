@@ -5,14 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>alterplan · planning de garde</title>
   <meta name="description" content="Planning de garde partagé : chez qui sont les enfants, semaine après semaine.">
-  <meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#101312" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)" id="tc-light">
+  <meta name="theme-color" content="#101312" media="(prefers-color-scheme: dark)" id="tc-dark">
   <meta name="robots" content="noindex">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="preload" href="fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
+  <script>
+    /* Thème choisi (clair / sombre), appliqué avant l'affichage pour éviter un flash. */
+    try { var t = localStorage.getItem("alterplan.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
 </head>
 <body>
   <header class="top">
@@ -23,6 +27,7 @@
       </a>
       <div class="top-actions">
         <span id="sync" class="sync" role="status" aria-live="polite"></span>
+        <button type="button" id="theme-btn" class="icon-btn" aria-label="Thème"></button>
         <button type="button" id="me-btn" class="pill-btn" aria-haspopup="dialog"></button>
         <button type="button" id="settings-btn" class="icon-btn" aria-label="Réglages">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
@@ -155,6 +160,15 @@
         <h2 id="dlg-set-h">Réglages</h2>
         <button type="button" class="icon-btn" data-close aria-label="Fermer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       </div>
+
+      <section class="set-sec">
+        <h3>Apparence</h3>
+        <div class="seg theme-seg" id="theme-seg" role="radiogroup" aria-label="Thème">
+          <button type="button" role="radio" data-t="system">Système</button>
+          <button type="button" role="radio" data-t="light">Clair</button>
+          <button type="button" role="radio" data-t="dark">Sombre</button>
+        </div>
+      </section>
 
       <section class="set-sec">
         <h3>Les parents</h3>

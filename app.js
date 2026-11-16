@@ -801,6 +801,28 @@
     });
   }
 
+  /* ===== Thème : système (par défaut), clair ou sombre ===== */
+  const THEMES = {
+    system: { label: "Thème : adapté au système", svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor"/></svg>' },
+    light: { label: "Thème : clair", svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>' },
+    dark: { label: "Thème : sombre", svg: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>' },
+  };
+  const ORDER = ["system", "light", "dark"];
+  const theme = () => { const t = LS.get("alterplan.theme"); return t === "light" || t === "dark" ? t : "system"; };
+  function applyTheme(t) {
+    LS.set("alterplan.theme", t === "system" ? null : t);
+    if (t === "system") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = t;
+    // Couleur de la barre du navigateur (mobile) : suit le thème choisi.
+    $("#tc-light").media = t === "system" ? "(prefers-color-scheme: light)" : t === "light" ? "all" : "not all";
+    $("#tc-dark").media = t === "system" ? "(prefers-color-scheme: dark)" : t === "dark" ? "all" : "not all";
+    const b = $("#theme-btn");
+    b.innerHTML = THEMES[t].svg;
+    b.title = `${THEMES[t].label} (toucher pour changer)`;
+    b.setAttribute("aria-label", b.title);
+    $$("#theme-seg button").forEach((x) => { const on = x.dataset.t === t; x.classList.toggle("active", on); x.setAttribute("aria-checked", on); });
+  }
+
   /* ===== Démarrage ===== */
   async function connect() {
     if (S.token()) {
@@ -816,6 +838,14 @@
   }
 
   async function init() {
+    $$("#theme-seg button").forEach((x) => x.insertAdjacentHTML("afterbegin", THEMES[x.dataset.t].svg));
+    applyTheme(theme());
+    $("#theme-btn").onclick = () => {
+      const t = ORDER[(ORDER.indexOf(theme()) + 1) % 3];
+      applyTheme(t);
+      toast(THEMES[t].label);
+    };
+    $("#theme-seg").addEventListener("click", (e) => { const b = e.target.closest("button[data-t]"); if (b) applyTheme(b.dataset.t); });
     applyColors();
     renderSuggest();
     renderStatsOptions();
