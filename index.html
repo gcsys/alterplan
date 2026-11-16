@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>alterplan · planning de garde</title>
+  <meta name="description" content="Planning de garde partagé : chez qui sont les enfants, semaine après semaine.">
+  <meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101312" media="(prefers-color-scheme: dark)">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preload" href="fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-in">
+      <a class="brand" href="./" aria-label="alterplan, accueil">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+        <span class="brand-name">alterplan</span>
+      </a>
+      <div class="top-actions">
+        <span id="sync" class="sync" role="status" aria-live="polite"></span>
+        <button type="button" id="me-btn" class="pill-btn" aria-haspopup="dialog"></button>
+        <button type="button" id="settings-btn" class="icon-btn" aria-label="Réglages">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Maintenant -->
+    <section class="card now" id="now" aria-live="polite"></section>
+
+    <!-- Recherche -->
+    <section class="card search" aria-labelledby="search-h">
+      <h2 id="search-h" class="sr-only">Recherche rapide</h2>
+      <form id="search-form" class="search-box" autocomplete="off">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" enterkeyhint="search" placeholder="Le 17 juin, suis-je dispo ?" aria-label="Une date, un week-end, une période…">
+      </form>
+      <div class="suggest" id="suggest"></div>
+      <div id="answer" class="answer" aria-live="polite"></div>
+    </section>
+
+    <!-- Calendrier -->
+    <section class="card cal" aria-labelledby="cal-h">
+      <div class="cal-nav">
+        <button type="button" class="icon-btn" id="prev" aria-label="Mois précédent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+        <h2 id="cal-h"></h2>
+        <button type="button" class="icon-btn" id="next" aria-label="Mois suivant"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+        <button type="button" class="btn small ghost" id="today-btn">Aujourd'hui</button>
+      </div>
+      <div class="cal-tools" id="cal-tools">
+        <div class="seg" role="radiogroup" aria-label="Ce que change un toucher">
+          <button type="button" role="radio" data-scope="week" class="active" aria-checked="true">Semaine</button>
+          <button type="button" role="radio" data-scope="weekend" aria-checked="false">Week-end</button>
+          <button type="button" role="radio" data-scope="day" aria-checked="false">Jour</button>
+        </div>
+        <p class="hint" id="cal-hint"></p>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <ul class="legend" id="legend"></ul>
+    </section>
+
+    <div class="cols">
+      <!-- Statistiques -->
+      <section class="card stats" aria-labelledby="stats-h">
+        <div class="card-h">
+          <h2 id="stats-h">Statistiques</h2>
+          <select id="stats-period" aria-label="Période"></select>
+        </div>
+        <div id="stats-custom" class="stats-custom" hidden>
+          <label>Du <input type="date" id="st-from"></label>
+          <label>au <input type="date" id="st-to"></label>
+        </div>
+        <div id="stats-body"></div>
+      </section>
+
+      <!-- Exceptions -->
+      <section class="card exc" aria-labelledby="exc-h">
+        <div class="card-h">
+          <h2 id="exc-h">Exceptions</h2>
+          <button type="button" class="btn small" id="add-exc">+ Ajouter</button>
+        </div>
+        <form id="exc-form" class="exc-form" hidden>
+          <div class="row2">
+            <label>Du <input type="date" id="ex-from" required></label>
+            <label>Au <input type="date" id="ex-to" required></label>
+          </div>
+          <div class="who-pick" id="ex-who" role="radiogroup" aria-label="Chez qui"></div>
+          <label class="full">Note <input type="text" id="ex-note" maxlength="80" placeholder="Vacances de Noël, anniversaire…"></label>
+          <div class="form-actions">
+            <button type="button" class="btn ghost small" id="ex-cancel">Annuler</button>
+            <button type="submit" class="btn primary small">Enregistrer</button>
+          </div>
+        </form>
+        <ul class="exc-list" id="exc-list"></ul>
+        <button type="button" class="link-btn" id="exc-past" hidden></button>
+      </section>
+    </div>
+
+    <footer class="foot">
+      <p>alterplan · planning partagé, enregistré dans <a id="repo-link" href="#" target="_blank" rel="noopener">le repo GitHub</a>.</p>
+    </footer>
+  </main>
+
+  <!-- Qui consulte ? -->
+  <dialog id="dlg-me" class="dlg small-dlg" aria-labelledby="dlg-me-h">
+    <form method="dialog" class="dlg-in">
+      <h2 id="dlg-me-h">Qui consulte le planning ?</h2>
+      <p class="muted">Pour répondre à « suis-je dispo ? ». Le choix reste sur cet appareil.</p>
+      <div class="me-choices" id="me-choices"></div>
+      <button value="none" class="link-btn">Juste regarder</button>
+    </form>
+  </dialog>
+
+  <!-- Réglages -->
+  <dialog id="dlg-set" class="dlg" aria-labelledby="dlg-set-h">
+    <div class="dlg-in">
+      <div class="dlg-head">
+        <h2 id="dlg-set-h">Réglages</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Fermer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+
+      <section class="set-sec">
+        <h3>Les parents</h3>
+        <div class="parents-edit" id="parents-edit"></div>
+      </section>
+
+      <section class="set-sec">
+        <h3>Rythme de base</h3>
+        <div class="presets" id="presets" role="radiogroup" aria-label="Rythme"></div>
+        <div class="rh-ref" id="rh-ref">
+          <span id="rh-ref-lbl">Une période chez</span>
+          <div class="who-pick small" id="rh-first" role="radiogroup" aria-label="Parent"></div>
+          <span id="rh-ref-lbl2">commence le</span>
+          <input type="date" id="rh-date">
+        </div>
+        <p class="muted small" id="rh-help"></p>
+        <div class="rh-preview" id="rh-preview" aria-label="Aperçu des 4 prochaines semaines"></div>
+      </section>
+
+      <section class="set-sec" id="sec-share">
+        <h3>Partage et modification</h3>
+        <p class="muted small" id="share-state"></p>
+        <details class="token-help">
+          <summary>Comment obtenir un jeton GitHub ?</summary>
+          <ol>
+            <li>Ouvre <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com › Settings › Fine-grained tokens</a>.</li>
+            <li>Nom : <em>alterplan</em>, expiration au choix (1 an par exemple).</li>
+            <li>Repository access : <em>Only select repositories</em> › <strong id="repo-name"></strong>.</li>
+            <li>Permissions › Repository › <em>Contents</em> : <strong>Read and write</strong>.</li>
+            <li>Génère, copie le jeton et colle-le ci-dessous. Il reste sur cet appareil.</li>
+          </ol>
+          <p>L'autre parent peut faire de même avec son propre compte GitHub, s'il a accès au repo, ou utiliser un jeton que tu lui transmets.</p>
+        </details>
+        <div class="token-row">
+          <input type="password" id="token" placeholder="github_pat_…" autocomplete="off" spellcheck="false" aria-label="Jeton GitHub">
+          <button type="button" class="btn small primary" id="token-save">Activer</button>
+          <button type="button" class="btn small ghost" id="token-clear" hidden>Retirer</button>
+        </div>
+      </section>
+
+      <section class="set-sec">
+        <h3>Sauvegarde</h3>
+        <div class="row-btns">
+          <button type="button" class="btn small" id="export">Exporter (JSON)</button>
+          <label class="btn small">Importer<input type="file" id="import" accept="application/json,.json" hidden></label>
+          <button type="button" class="btn small" id="ics">Calendrier (.ics)</button>
+        </div>
+      </section>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="planning.js"></script>
+  <script src="storage.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
