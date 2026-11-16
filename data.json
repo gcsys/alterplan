@@ -48,6 +48,12 @@
       "year": 2017
     },
     {
+      "id": "mwjelak8",
+      "kind": "trail",
+      "title": "Veni Vici",
+      "date": "2026-11-07"
+    },
+    {
       "id": "mwjei3r2",
       "kind": "trail",
       "title": "Hivernatrail",
@@ -60,5 +66,5 @@
       "date": "2027-02-21"
     }
   ],
-  "updated": "2026-11-16T15:13:08.508Z"
+  "updated": "2026-11-16T15:13:31.507Z"
 }
