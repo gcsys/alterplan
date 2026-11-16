@@ -45,6 +45,13 @@
       "date": "2026-11-07"
     },
     {
+      "id": "mwjesy7n",
+      "kind": "anniv",
+      "title": "Sortie trail avec Gaël",
+      "date": "2026-11-28",
+      "year": 2026
+    },
+    {
       "id": "mwjei3r2",
       "kind": "trail",
       "title": "Hivernatrail",
@@ -63,5 +70,5 @@
       "date": "2027-03-12"
     }
   ],
-  "updated": "2026-11-16T15:14:15.605Z"
+  "updated": "2026-11-16T15:19:28.746Z"
 }
