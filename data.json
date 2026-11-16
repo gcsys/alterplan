@@ -1,9 +1,29 @@
 {
   "version": 1,
   "parents": {
-    "a": { "name": "Papa", "color": "#0f8b8d" },
-    "b": { "name": "Maman", "color": "#e76f51" }
+    "a": {
+      "name": "Papa",
+      "color": "#0f8b8d"
+    },
+    "b": {
+      "name": "Maman",
+      "color": "#e76f51"
+    }
   },
-  "rhythm": { "preset": "alt1", "first": "b", "ref": "2026-11-16" },
-  "overrides": {}
+  "rhythm": {
+    "preset": "alt1",
+    "first": "b",
+    "ref": "2026-11-16"
+  },
+  "overrides": {},
+  "events": [
+    {
+      "id": "mwjef1y3",
+      "kind": "anniv",
+      "title": "Samantha",
+      "date": "1991-02-09",
+      "year": 1991
+    }
+  ],
+  "updated": "2026-11-16T15:10:04.891Z"
 }
