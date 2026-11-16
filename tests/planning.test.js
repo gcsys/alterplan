@@ -88,3 +88,34 @@ test("recherche en français", () => {
   assert.equal(P.parse("n'importe quoi", T), null);
   assert.equal(P.parse("31 février", T), null);
 });
+
+require("../feries.js");
+const F = globalThis.Feries;
+
+test("jours fériés et vacances zone C", () => {
+  assert.equal(F.easter(2027), "2027-03-28");
+  assert.equal(F.ferie("2027-05-06"), "Ascension");
+  assert.equal(F.ferie("2027-05-17"), "Lundi de Pentecôte");
+  assert.equal(F.ferie("2026-12-25"), "Noël");
+  assert.equal(F.ferie("2026-12-24"), null);
+  assert.equal(F.vacances("2026-12-25").key, "noel");
+  assert.equal(F.vacances("2027-01-04"), null);
+  assert.equal(F.findVacances("vacances de noël", T).from, "2026-12-19");
+  assert.equal(F.findVacances("toussaint 2027", T).from, "2027-10-23");
+  assert.equal(F.findVacances("vacances", T).key, "noel");
+  assert.equal(F.findVacances("fête nationale", T), null);
+});
+
+test("événements : anniversaire annuel, trail sur plusieurs jours, recherche", () => {
+  const d = P.clean({ ...data, events: [
+    { id: "1", kind: "anniv", title: "Léo", date: "2018-06-17", year: 2018 },
+    { id: "2", kind: "trail", title: "Trail des Cévennes", date: "2027-05-15", end: "2027-05-16" },
+    { id: "3", kind: "anniv", title: "Mamie", date: "2000-02-29" },
+  ] });
+  assert.equal(P.eventsOn(d, "2027-06-17")[0].age, 9);
+  assert.equal(P.eventsOn(d, "2027-05-16")[0].title, "Trail des Cévennes");
+  assert.equal(P.eventsOn(d, "2027-02-28")[0].title, "Mamie");
+  assert.deepEqual(P.upcoming(d, T, 3).map((e) => e.on), ["2027-02-28", "2027-05-15", "2027-06-17"]);
+  assert.equal(P.findEvent(d, "anniversaire de léo", T).on, "2027-06-17");
+  assert.equal(P.findEvent(d, "cévennes", T).on, "2027-05-15");
+});

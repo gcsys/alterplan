@@ -18,6 +18,12 @@ Site statique hébergé sur GitHub Pages, sans serveur ni compte à créer.
   Elles l'emportent toujours sur le rythme.
 - **Statistiques** : jours et pourcentage chez chaque parent, week-ends, jours en exception, écart et
   détail mois par mois, sur l'année, l'année scolaire, 12 mois glissants ou une période libre.
+- **Événements** : anniversaires (rappel chaque année, avec l'âge), trails (sur un ou plusieurs jours),
+  autres événements. Visibles dans le calendrier, l'accueil, la recherche (« anniversaire de Léo ») et l'export .ics.
+- **Vacances scolaires (zone C, Aigues-Vives) et jours fériés** dans le calendrier, la recherche
+  (« vacances de Noël », « Toussaint 2027 ») et les statistiques (répartition des jours de vacances).
+  Les dates des vacances sont dans `feries.js` (jusqu'à l'été 2028) : à compléter quand le ministère
+  publie l'année suivante. Les jours fériés sont calculés automatiquement.
 - **Export** JSON, import, et fichier `.ics` à ajouter à un agenda (Google, Apple, Outlook).
 
 ## Partage des données
@@ -39,5 +45,6 @@ npm test                 # node --test tests/*.test.js
 ```
 
 - `planning.js` : logique pure (rythme, exceptions, stats, recherche), testée sous Node.
+- `feries.js` : jours fériés (calculés) et vacances scolaires zone C.
 - `storage.js` : lecture / écriture de `data.json` via l'API GitHub.
 - `app.js`, `index.html`, `style.css` : interface.

@@ -80,6 +80,35 @@
         <div id="stats-body"></div>
       </section>
 
+      <div class="stack">
+      <!-- Événements -->
+      <section class="card evts" aria-labelledby="ev-h">
+        <div class="card-h">
+          <h2 id="ev-h">Événements</h2>
+          <button type="button" class="btn small" id="add-ev">+ Ajouter</button>
+        </div>
+        <form id="ev-form" class="exc-form" hidden>
+          <div class="seg kind-seg" id="ev-kind" role="radiogroup" aria-label="Type">
+            <button type="button" role="radio" data-k="anniv">🎂 Anniversaire</button>
+            <button type="button" role="radio" data-k="trail">🏃 Trail</button>
+            <button type="button" role="radio" data-k="event">⭐ Événement</button>
+          </div>
+          <label class="full"><span id="ev-title-lbl">Titre</span> <input type="text" id="ev-title" maxlength="60" required></label>
+          <div class="row2">
+            <label><span id="ev-date-lbl">Date</span> <input type="date" id="ev-date" required></label>
+            <label id="ev-end-wrap">Fin (facultatif) <input type="date" id="ev-end"></label>
+            <label id="ev-age-wrap" class="check"><input type="checkbox" id="ev-age" checked> Afficher l'âge</label>
+          </div>
+          <div class="who-pick" id="ev-who" role="radiogroup" aria-label="Concerne"></div>
+          <div class="form-actions">
+            <button type="button" class="btn ghost small" id="ev-cancel">Annuler</button>
+            <button type="submit" class="btn primary small">Enregistrer</button>
+          </div>
+        </form>
+        <ul class="ev-list" id="ev-list"></ul>
+        <button type="button" class="link-btn" id="ev-more" hidden></button>
+      </section>
+
       <!-- Exceptions -->
       <section class="card exc" aria-labelledby="exc-h">
         <div class="card-h">
@@ -101,6 +130,7 @@
         <ul class="exc-list" id="exc-list"></ul>
         <button type="button" class="link-btn" id="exc-past" hidden></button>
       </section>
+      </div>
     </div>
 
     <footer class="foot">
@@ -179,6 +209,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="planning.js"></script>
+  <script src="feries.js"></script>
   <script src="storage.js"></script>
   <script src="app.js"></script>
 </body>

@@ -349,6 +349,44 @@ code { font-size: .85em; background: var(--surface-3); padding: 1px 5px; border-
 .toast.on { transform: translate(-50%, 0); opacity: 1; }
 .toast button { border: 0; background: color-mix(in srgb, var(--surface) 18%, transparent); color: var(--surface); border-radius: 9px; padding: 6px 12px; font-weight: 700; white-space: nowrap; }
 
+/* ===== Vacances, fériés, événements ===== */
+:root { --vac: #e9a23b; }
+.d.vac::before { content: ""; position: absolute; left: 6px; right: 6px; top: 3px; height: 3px; border-radius: 2px; background: var(--vac); }
+.d.ferie { outline: 1.5px dashed var(--text-2); outline-offset: -5px; }
+.d .dn { line-height: 1; }
+.d { grid-auto-rows: min-content; align-content: center; gap: 1px; }
+.dev { font-size: .78rem; line-height: 1; letter-spacing: -1px; font-family: system-ui, sans-serif; }
+@media (max-width: 560px) { .dev { font-size: .6rem; } }
+.lg-vac { width: 16px; height: 4px; border-radius: 2px; background: var(--vac); }
+.lg-ferie { width: 14px; height: 14px; border-radius: 4px; border: 1.5px dashed var(--text-2); }
+.ev-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: .8rem; font-weight: 600; color: var(--text-2); }
+.vac-tag { background: color-mix(in srgb, var(--vac) 18%, var(--surface)); border-color: color-mix(in srgb, var(--vac) 40%, var(--border)); }
+.ferie-tag { border-style: dashed; }
+.ans-ev { display: flex; flex-wrap: wrap; gap: 6px; }
+.sd { position: relative; }
+.sd.ferie { outline: 1.5px dashed var(--text-2); outline-offset: -3px; }
+.sd i { font-style: normal; font-size: .6rem; position: absolute; top: -6px; right: -4px; }
+.vac-next { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; text-align: left; border: 1px solid color-mix(in srgb, var(--vac) 40%, var(--border)); background: color-mix(in srgb, var(--vac) 10%, var(--surface)); border-radius: 12px; padding: 10px 12px; }
+.vac-next .lbl { grid-column: 1 / -1; font-size: .72rem; color: var(--muted); font-weight: 600; }
+.vac-next strong { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; }
+.vac-next .vn-d { font-size: .85rem; color: var(--text-2); font-weight: 600; }
+.vac-next .split { grid-column: 1 / -1; height: 6px; }
+.vac-next .vn-n { grid-column: 1 / -1; font-size: .8rem; }
+.stack { display: grid; gap: 16px; min-width: 0; }
+.ev-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ev-list .empty { color: var(--muted); font-size: .9rem; padding: 8px 0; }
+.ev-item { display: flex; align-items: center; gap: 12px; padding: 10px 8px 10px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
+.ev-ico { font-size: 1.4rem; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); flex: none; }
+.ev-item .ex-dates { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ev-item .ex-dates::first-letter { text-transform: none; }
+.ev-item .ex-meta .who { font-size: .82rem; }
+#ev-more { margin-top: 12px; }
+.kind-seg { flex-wrap: wrap; }
+.kind-seg button { padding: 0 10px; }
+.who-pick button.on.wp-x { background: var(--text); border-color: var(--text); color: var(--surface); }
+.exc-form label.check { display: flex; flex-direction: row; align-items: center; gap: 8px; align-self: end; min-height: 38px; color: var(--text-2); font-size: .86rem; }
+.tiles { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+
 .foot { text-align: center; color: var(--muted); font-size: .8rem; padding-top: 8px; }
 .foot p { margin: 0; }
 

@@ -73,8 +73,67 @@
         ref: isIso(rh.ref) ? rh.ref : DEFAULT.rhythm.ref,
       },
       overrides,
+      events: cleanEvents(r.events),
       ...(r.updated ? { updated: String(r.updated) } : {}),
     };
+  }
+
+  /* ===== Événements : anniversaires (chaque année), trails, autres =====
+   * { id, kind: "anniv" | "trail" | "event", title, date, end?, year? (naissance), who? ("a"|"b") } */
+  const KINDS = {
+    anniv: { label: "Anniversaire", icon: "🎂" },
+    trail: { label: "Trail", icon: "🏃" },
+    event: { label: "Événement", icon: "⭐" },
+  };
+  function cleanEvents(list) {
+    const out = [];
+    for (const e of Array.isArray(list) ? list : []) {
+      if (!e || !isIso(e.date) || !KINDS[e.kind] || !String(e.title || "").trim()) continue;
+      const ev = { id: String(e.id || "").slice(0, 24) || Math.random().toString(36).slice(2, 10), kind: e.kind, title: String(e.title).trim().slice(0, 60), date: e.date };
+      if (e.kind !== "anniv" && isIso(e.end) && e.end > e.date && diffDays(e.date, e.end) < 60) ev.end = e.end;
+      if (e.kind === "anniv" && /^\d{4}$/.test(String(e.year || ""))) ev.year = Number(e.year);
+      if (isW(e.who)) ev.who = e.who;
+      out.push(ev);
+    }
+    return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  }
+  const leap = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  /* Date de l'anniversaire une année donnée (29 février -> 28 les autres années). */
+  const annivIn = (e, y) => {
+    const md = e.date.slice(5);
+    return `${y}-${md === "02-29" && !leap(y) ? "02-28" : md}`;
+  };
+  /* Événements du jour d : [{...e, age?}] */
+  function eventsOn(data, d) {
+    const out = [];
+    for (const e of data.events || []) {
+      if (e.kind === "anniv") {
+        const y = Number(d.slice(0, 4));
+        if (annivIn(e, y) === d && (!e.year || y >= e.year)) out.push({ ...e, on: d, ...(e.year ? { age: y - e.year } : {}) });
+      } else if (e.date <= d && d <= (e.end || e.date)) out.push({ ...e, on: d });
+    }
+    return out;
+  }
+  /* Prochaines occurrences à partir de d (événement en cours compris), triées. */
+  function upcoming(data, from, n = 8) {
+    const out = [];
+    const y = Number(from.slice(0, 4));
+    for (const e of data.events || []) {
+      if (e.kind === "anniv") {
+        let at = annivIn(e, y);
+        if (at < from) at = annivIn(e, y + 1);
+        const ay = Number(at.slice(0, 4));
+        out.push({ ...e, on: at, ...(e.year ? { age: ay - e.year } : {}) });
+      } else if ((e.end || e.date) >= from) out.push({ ...e, on: e.date });
+    }
+    return out.sort((a, b) => (a.on < b.on ? -1 : a.on > b.on ? 1 : 0)).slice(0, n);
+  }
+  /* Recherche d'un événement par son titre : « anniversaire de Léo », « trail des Cévennes ». */
+  function findEvent(data, q, from) {
+    const s = norm(q).replace(/\b(anniversaire|anniv|de|du|des|d|la|le|les|quand|est|c est|l|trail|course)\b/g, " ").replace(/\s+/g, " ").trim();
+    if (s.length < 2) return null;
+    const hit = upcoming(data, from, 500).find((e) => norm(e.title).includes(s));
+    return hit || null;
   }
 
   /* Le rythme seul : chez qui est ce jour ? */
@@ -326,6 +385,7 @@
   root.Planning = {
     PRESETS, DEFAULT, MOIS, MOIS_C, JOURS,
     isIso, utc, iso, addDays, diffDays, dow, mondayOf, todayIso, other, range, weekDays, weekendDays,
+    KINDS, cleanEvents, eventsOn, upcoming, findEvent,
     clean, base, day, who, setDays, toggleDays, periods, nextSwitch, periodStart, stats,
     parse, parseOne, norm, longDate, shortDate, rangeLabel, monthTitle, dayName,
   };

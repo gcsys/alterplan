@@ -1,6 +1,6 @@
 /* alterplan · interface. La logique est dans planning.js, le stockage dans storage.js. */
 (function () {
-  const P = window.Planning, S = window.Store;
+  const P = window.Planning, S = window.Store, F = window.Feries;
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -142,6 +142,21 @@
     for (let i = 0; i < 60; i++, sat = P.addDays(sat, 7)) if (P.who(st.data, sat) === w && P.who(st.data, P.addDays(sat, 1)) === w) return sat;
     return null;
   }
+  function nextVac() {
+    const v = F.nextVacances(today())[0];
+    if (!v) return "";
+    const days = P.range(v.from, v.to), n = { a: 0, b: 0 };
+    days.forEach((d) => n[P.who(st.data, d)]++);
+    const inside = v.from <= today();
+    const wait = P.diffDays(today(), v.from);
+    return `<button type="button" class="vac-next" data-goto="${v.from}">
+      <span class="lbl">${inside ? "En ce moment" : `Prochaines vacances · dans ${wait} jour${wait > 1 ? "s" : ""}`}</span>
+      <strong>${esc(v.name)}</strong>
+      <span class="vn-d">${P.rangeLabel(v.from, v.to)}</span>
+      <span class="split"><i class="t-a" style="flex:${n.a}"></i><i class="t-b" style="flex:${n.b}"></i></span>
+      <span class="vn-n"><b class="c-a">${esc(name("a"))} ${n.a} j</b> · <b class="c-b">${esc(name("b"))} ${n.b} j</b></span>
+    </button>`;
+  }
   function renderNow() {
     const t = today(), x = P.day(st.data, t), w = x.w;
     const sw = P.nextSwitch(st.data, t);
@@ -176,21 +191,37 @@
       <div class="now-side">
         <div class="weeks" aria-label="Les 8 prochaines semaines">${weeks}</div>
         ${we}
+        ${nextVac()}
       </div>`;
   }
 
   /* ===== Recherche ===== */
-  const SUGG = ["Ce week-end", "Semaine prochaine", "Noël", "Du 10 au 15 août", "Le 17 juin"];
+  const SUGG = ["Ce week-end", "Semaine prochaine", "Vacances de Noël", "Du 10 au 15 août", "Le 17 juin"];
   function renderSuggest() {
     $("#suggest").innerHTML = SUGG.map((s) => `<button type="button" class="chip">${esc(s)}</button>`).join("");
+  }
+  /* Ce qui se passe un jour : événements, férié, vacances. */
+  const evLabel = (e) => `${P.KINDS[e.kind].icon} ${e.kind === "anniv" ? `Anniversaire de ${e.title}${e.age != null ? ` (${e.age} an${e.age > 1 ? "s" : ""})` : ""}` : e.title}`;
+  function dayExtras(d) {
+    const out = P.eventsOn(st.data, d).map((e) => `<span class="ev-tag k-${e.kind}">${esc(evLabel(e))}${e.who ? ` · ${esc(name(e.who))}` : ""}</span>`);
+    const f = F.ferie(d), v = F.vacances(d);
+    if (f) out.push(`<span class="ev-tag ferie-tag">Férié · ${esc(f)}</span>`);
+    if (v) out.push(`<span class="ev-tag vac-tag">${esc(v.name)}</span>`);
+    return out.join("");
   }
   function answer(q) {
     const el = $("#answer");
     if (!q.trim()) { el.innerHTML = ""; el.className = "answer"; return; }
-    const r = P.parse(q, today());
+    let r = null, found = null;
+    const vac = F.findVacances(q, today());
+    if (vac) r = { from: vac.from, to: vac.to, kind: "vac", title: `${vac.name} ${vac.from.slice(0, 4)}${vac.to.slice(0, 4) !== vac.from.slice(0, 4) ? "-" + vac.to.slice(0, 4) : ""}` };
+    if (!r) r = P.parse(q, today());
+    if (!r && (found = P.findEvent(st.data, q, today()))) {
+      r = { from: found.on, to: found.kind === "anniv" ? found.on : found.end || found.on, kind: "event", title: evLabel(found) };
+    }
     if (!r) {
       el.className = "answer miss";
-      el.innerHTML = `<p>Je n'ai pas reconnu de date. Essaie « 17 juin », « samedi », « ce week-end », « du 10 au 15 août » ou « en juillet ».</p>`;
+      el.innerHTML = `<p>Je n'ai pas reconnu de date. Essaie « 17 juin », « samedi », « ce week-end », « du 10 au 15 août », « vacances de Noël » ou le nom d'un événement.</p>`;
       return;
     }
     const days = P.range(r.from, r.to);
@@ -201,12 +232,15 @@
       const x = info[0], d = days[0];
       const start = P.periodStart(st.data, d), sw = P.nextSwitch(st.data, d);
       const verdict = me ? (x.w === me ? `<span class="verdict with">Non, tu as les enfants</span>` : `<span class="verdict free">Oui, tu es dispo</span>`) : "";
+      const extras = dayExtras(d);
       el.className = `answer hit ans-${x.w}`;
       el.innerHTML = `
         <div class="ans-date"><span class="ans-dow">${P.dayName(d)}</span><span class="ans-num">${new Date(P.utc(d)).getUTCDate()}</span><span class="ans-mon">${P.MOIS[new Date(P.utc(d)).getUTCMonth()]} ${d.slice(0, 4)}</span></div>
         <div class="ans-body">
+          ${r.kind === "event" ? `<p class="ans-title">${esc(r.title)}</p>` : ""}
           ${verdict}
           <p class="ans-who">Les enfants sont chez <strong class="c-${x.w}">${esc(name(x.w))}</strong>${x.changed ? ` <span class="note-tag">exception</span>` : ""}${x.note ? ` <span class="note-tag">${esc(x.note)}</span>` : ""}</p>
+          ${extras ? `<p class="ans-ev">${extras}</p>` : ""}
           <p class="muted">Du ${P.longDate(start)} au ${sw ? P.longDate(P.addDays(sw, -1)) : "…"}.</p>
           ${goto}
         </div>`;
@@ -214,7 +248,11 @@
     }
     const n = { a: 0, b: 0 };
     info.forEach((x) => n[x.w]++);
-    const strip = days.map((d, i) => `<span class="sd t-${info[i].w}" title="${esc(P.longDate(d))} : ${esc(name(info[i].w))}"><b>${P.JOURS[P.dow(d)][0].toUpperCase()}</b>${new Date(P.utc(d)).getUTCDate()}</span>`).join("");
+    const strip = days.map((d, i) => {
+      const evs = P.eventsOn(st.data, d), f = F.ferie(d);
+      const tip = `${P.longDate(d)} : ${name(info[i].w)}${evs.length ? " · " + evs.map(evLabel).join(", ") : ""}${f ? " · " + f : ""}`;
+      return `<span class="sd t-${info[i].w}${f ? " ferie" : ""}" title="${esc(tip)}"><b>${P.JOURS[P.dow(d)][0].toUpperCase()}</b>${new Date(P.utc(d)).getUTCDate()}${evs.length ? `<i>${evs.map((e) => P.KINDS[e.kind].icon).join("")}</i>` : ""}</span>`;
+    }).join("");
     let verdict = "";
     if (me) {
       const free = days.filter((d, i) => info[i].w !== me);
@@ -222,7 +260,10 @@
         : !free.length ? `<span class="verdict with">Non, tu as les enfants tout du long</span>`
         : `<span class="verdict part">Dispo ${free.length} jour${free.length > 1 ? "s" : ""} sur ${days.length}</span>`;
     }
-    const title = r.kind === "weekend" ? `Week-end du ${P.rangeLabel(r.from, r.to)}` : r.kind === "week" ? `Semaine du ${P.rangeLabel(r.from, r.to)}` : r.kind === "month" ? P.monthTitle(r.from.slice(0, 7)) : `Du ${P.longDate(r.from)} au ${P.longDate(r.to)}`;
+    const evs = [];
+    days.forEach((d) => P.eventsOn(st.data, d).forEach((e) => { if (!evs.some((x) => x.id === e.id)) evs.push(e); }));
+    const title = r.title ? `${r.title}, du ${P.longDate(r.from)} au ${P.longDate(r.to)}`
+      : r.kind === "weekend" ? `Week-end du ${P.rangeLabel(r.from, r.to)}` : r.kind === "week" ? `Semaine du ${P.rangeLabel(r.from, r.to)}` : r.kind === "month" ? P.monthTitle(r.from.slice(0, 7)) : `Du ${P.longDate(r.from)} au ${P.longDate(r.to)}`;
     el.className = "answer hit range";
     el.innerHTML = `
       <div class="ans-body">
@@ -230,6 +271,7 @@
         ${verdict}
         <p class="ans-who">${n.a ? `${pill("a")} ${n.a} j` : ""} ${n.b ? `${pill("b")} ${n.b} j` : ""}</p>
         <div class="strip${days.length > 16 ? " dense" : ""}">${strip}</div>
+        ${evs.length && days.length <= 62 ? `<p class="ans-ev">${evs.map((e) => `<span class="ev-tag k-${e.kind}">${esc(evLabel(e))} · ${P.shortDate(e.on)}</span>`).join("")}</p>` : ""}
         ${goto}
       </div>`;
   }
@@ -244,12 +286,13 @@
       const days = P.weekDays(mon), info = days.map((d) => P.day(st.data, d));
       const cnt = { a: 0, b: 0 };
       info.forEach((x) => cnt[x.w]++);
-      const notes = [...new Set(info.map((x) => x.note).filter(Boolean))];
+      const notes = [...new Set(info.map((x) => x.note).concat(days.map((d) => (F.vacances(d) || {}).name)).filter(Boolean))];
       const cells = days.map((d, i) => {
         const x = info[i], out = d.slice(0, 7) !== st.month;
         const prevW = i > 0 ? info[i - 1].w : P.who(st.data, P.addDays(d, -1));
-        const lbl = `${P.longDate(d)} : chez ${name(x.w)}${x.changed ? " (exception)" : ""}${x.note ? `, ${x.note}` : ""}`;
-        return `<button type="button" class="d t-${x.w}${i >= 5 ? " we" : ""}${out ? " out" : ""}${d === t ? " today" : ""}${x.changed ? " exc" : ""}${x.note ? " noted" : ""}${prevW !== x.w ? " swp" : ""}" data-day="${d}" aria-label="${esc(lbl)}" title="${esc(lbl)}">${new Date(P.utc(d)).getUTCDate()}</button>`;
+        const evs = P.eventsOn(st.data, d), f = F.ferie(d), v = F.vacances(d);
+        const lbl = `${P.longDate(d)} : chez ${name(x.w)}${x.changed ? " (exception)" : ""}${x.note ? `, ${x.note}` : ""}${evs.length ? ". " + evs.map(evLabel).join(", ") : ""}${f ? `. Férié : ${f}` : ""}${v ? `. ${v.name}` : ""}`;
+        return `<button type="button" class="d t-${x.w}${i >= 5 ? " we" : ""}${out ? " out" : ""}${d === t ? " today" : ""}${x.changed ? " exc" : ""}${x.note ? " noted" : ""}${prevW !== x.w ? " swp" : ""}${v ? " vac" : ""}${f ? " ferie" : ""}" data-day="${d}" aria-label="${esc(lbl)}" title="${esc(lbl)}"><span class="dn">${new Date(P.utc(d)).getUTCDate()}</span>${evs.length ? `<span class="dev">${evs.slice(0, 3).map((e) => P.KINDS[e.kind].icon).join("")}</span>` : ""}</button>`;
       }).join("");
       const summary = cnt.a === 7 || cnt.b === 7
         ? pill(cnt.a === 7 ? "a" : "b")
@@ -270,7 +313,7 @@
       : "Lecture seule : ajoute un jeton GitHub dans les réglages pour modifier.";
   }
   function renderLegend() {
-    $("#legend").innerHTML = `<li>${pill("a")}</li><li>${pill("b")}</li><li><span class="lg-exc"></span>Exception</li><li><span class="lg-today"></span>Aujourd'hui</li>`;
+    $("#legend").innerHTML = `<li>${pill("a")}</li><li>${pill("b")}</li><li><span class="lg-exc"></span>Exception</li><li><span class="lg-today"></span>Aujourd'hui</li><li><span class="lg-vac"></span>Vacances scolaires (zone C)</li><li><span class="lg-ferie"></span>Jour férié</li><li>🎂 🏃 ⭐ Événements</li>`;
   }
 
   /* ===== Exceptions ===== */
@@ -298,6 +341,32 @@
     $("#add-exc").hidden = !canEdit();
   }
 
+  /* ===== Événements ===== */
+  function renderEvents() {
+    const t = today();
+    const list = P.upcoming(st.data, t, st.showAllEv ? 200 : 6);
+    const total = P.upcoming(st.data, t, 200).length;
+    $("#ev-list").innerHTML = list.length ? list.map((e) => {
+      const w = P.who(st.data, e.on), wait = P.diffDays(t, e.on);
+      const when = wait <= 0 ? "aujourd'hui" : wait === 1 ? "demain" : `dans ${wait} j`;
+      return `<li class="ev-item k-${e.kind}" data-id="${esc(e.id)}">
+        <span class="ev-ico" aria-hidden="true">${P.KINDS[e.kind].icon}</span>
+        <div class="ex-main">
+          <p class="ex-dates">${esc(e.kind === "anniv" ? e.title : e.title)}${e.age != null ? ` <span class="muted">${e.age} an${e.age > 1 ? "s" : ""}</span>` : ""}${e.who ? ` ${pill(e.who)}` : ""}</p>
+          <p class="ex-meta"><span>${e.end && e.kind !== "anniv" ? `${P.rangeLabel(e.date, e.end)}` : P.longDate(e.on)}</span><span class="muted">· ${when} ·</span>${pill(w, `enfants chez ${name(w)}`)}</p>
+        </div>
+        ${canEdit() ? `<div class="ex-act">
+          <button type="button" class="icon-btn sm" data-act="edit" aria-label="Modifier"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          <button type="button" class="icon-btn sm" data-act="del" aria-label="Supprimer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>` : ""}
+      </li>`;
+    }).join("") : `<li class="empty">Aucun événement. Ajoute des anniversaires (rappel chaque année), des trails ou d'autres dates.</li>`;
+    const more = $("#ev-more");
+    more.hidden = total <= 6;
+    more.textContent = st.showAllEv ? "Afficher moins" : `Voir les ${total} événements`;
+    $("#add-ev").hidden = !canEdit();
+  }
+
   /* ===== Statistiques ===== */
   function periodRange() {
     const t = today(), y = Number(t.slice(0, 4)), sy = t.slice(5) >= "09-01" ? y : y - 1;
@@ -323,6 +392,12 @@
     const [from, to] = periodRange();
     $("#stats-custom").hidden = st.statsPeriod !== "custom";
     const s = P.stats(st.data, from, to);
+    s.vacA = s.vacB = s.ferA = s.ferB = 0;
+    for (const d of P.range(from, to)) {
+      const w = P.who(st.data, d);
+      if (F.vacances(d)) w === "a" ? s.vacA++ : s.vacB++;
+      if (F.ferie(d)) w === "a" ? s.ferA++ : s.ferB++;
+    }
     const pa = s.total ? Math.round((s.a / s.total) * 1000) / 10 : 0, pb = Math.round((100 - pa) * 10) / 10;
     const diff = s.a - s.b;
     const max = Math.max(...s.months.map((m) => m.a + m.b), 1);
@@ -344,6 +419,8 @@
       <div class="tiles">
         <div class="tile"><span class="lbl">Week-ends</span><span class="val"><b class="c-a">${s.weA}</b> / <b class="c-b">${s.weB}</b></span></div>
         <div class="tile"><span class="lbl">Jours en exception</span><span class="val"><b class="c-a">${s.excA}</b> / <b class="c-b">${s.excB}</b></span></div>
+        <div class="tile"><span class="lbl">Vacances scolaires</span><span class="val"><b class="c-a">${s.vacA}</b> / <b class="c-b">${s.vacB}</b></span></div>
+        <div class="tile"><span class="lbl">Jours fériés</span><span class="val"><b class="c-a">${s.ferA}</b> / <b class="c-b">${s.ferB}</b></span></div>
         <div class="tile"><span class="lbl">Écart</span><span class="val">${diff === 0 ? "Équilibre parfait" : `<b class="c-${diff > 0 ? "a" : "b"}">${esc(name(diff > 0 ? "a" : "b"))}</b> +${Math.abs(diff)} j`}</span></div>
       </div>
       <ul class="months">${months}</ul>`;
@@ -362,6 +439,7 @@
     renderCal();
     renderLegend();
     renderExc();
+    renderEvents();
     renderStats();
     answer($("#q").value);
     if (dlgSet.open) renderSettings(false);
@@ -438,6 +516,13 @@
       if (x !== w) { push(start, P.addDays(d, -1), w); start = d; w = x; }
     }
     push(start, to, w);
+    for (const e of st.data.events) {
+      const base = ["BEGIN:VEVENT", `UID:${e.id}@alterplan`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${fmt(e.date)}`,
+        `DTEND;VALUE=DATE:${fmt(P.addDays(e.kind === "anniv" ? e.date : e.end || e.date, 1))}`,
+        `SUMMARY:${(e.kind === "anniv" ? `Anniversaire de ${e.title}` : e.title).replace(/[,;\\]/g, " ")}`];
+      if (e.kind === "anniv") base.push("RRULE:FREQ=YEARLY");
+      ev.push([...base, "END:VEVENT"].join("\r\n"));
+    }
     download("alterplan.ics", "text/calendar", ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//alterplan//FR", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Garde des enfants", ...ev, "END:VCALENDAR"].join("\r\n") + "\r\n");
   }
 
@@ -581,6 +666,66 @@
       }
     });
     $("#exc-past").onclick = () => { st.showPast = !st.showPast; renderExc(); };
+
+    // Événements
+    const evForm = $("#ev-form");
+    let evEditing = null;
+    const setKind = (k) => {
+      evForm.dataset.k = k;
+      $$("#ev-kind button").forEach((b) => { const on = b.dataset.k === k; b.classList.toggle("active", on); b.setAttribute("aria-checked", on); });
+      $("#ev-title-lbl").textContent = k === "anniv" ? "Prénom" : k === "trail" ? "Nom du trail" : "Titre";
+      $("#ev-title").placeholder = k === "anniv" ? "Léo" : k === "trail" ? "Trail des Cévennes" : "Spectacle de l'école";
+      $("#ev-date-lbl").textContent = k === "anniv" ? "Date de naissance" : "Date";
+      $("#ev-end-wrap").hidden = k === "anniv";
+      $("#ev-age-wrap").hidden = k !== "anniv";
+    };
+    const setEvWho = (w) => {
+      $("#ev-who").innerHTML = [["", "Pour tous"], ["a", name("a")], ["b", name("b")]].map(([v, l]) => `<button type="button" role="radio" aria-checked="${v === w}" class="${v === w ? "on " : ""}wp-${v || "x"}" data-w="${v}">${esc(l)}</button>`).join("");
+      $("#ev-who").dataset.w = w;
+    };
+    $("#ev-kind").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setKind(b.dataset.k); });
+    $("#ev-who").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setEvWho(b.dataset.w); });
+    const openEv = (ev) => {
+      evEditing = ev ? ev.id : null;
+      evForm.hidden = false;
+      setKind(ev ? ev.kind : "anniv");
+      $("#ev-title").value = ev ? ev.title : "";
+      $("#ev-date").value = ev ? ev.date : today();
+      $("#ev-end").value = ev && ev.end ? ev.end : "";
+      $("#ev-age").checked = ev ? !!ev.year : true;
+      setEvWho(ev && ev.who ? ev.who : "");
+      $("#ev-title").focus();
+    };
+    $("#add-ev").onclick = () => { if (!canEdit()) return askEdit(); evForm.hidden ? openEv(null) : (evForm.hidden = true); };
+    $("#ev-cancel").onclick = () => (evForm.hidden = true);
+    $("#ev-more").onclick = () => { st.showAllEv = !st.showAllEv; renderEvents(); };
+    evForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const k = evForm.dataset.k, title = $("#ev-title").value.trim(), date = $("#ev-date").value;
+      if (!title || !P.isIso(date)) return;
+      const ev = { id: evEditing || Date.now().toString(36), kind: k, title, date };
+      if (k !== "anniv" && P.isIso($("#ev-end").value) && $("#ev-end").value > date) ev.end = $("#ev-end").value;
+      if (k === "anniv" && $("#ev-age").checked) ev.year = Number(date.slice(0, 4));
+      if ($("#ev-who").dataset.w) ev.who = $("#ev-who").dataset.w;
+      const id = ev.id, prev = st.data.events.find((x) => x.id === id) || null;
+      const label = k === "anniv" ? `Anniversaire de ${title}` : title;
+      commit((d) => ({ ...d, events: d.events.filter((x) => x.id !== id).concat(ev) }), `${prev ? "Modification" : "Ajout"} : ${label}`, {
+        undo: (d) => ({ ...d, events: d.events.filter((x) => x.id !== id).concat(prev ? [prev] : []) }),
+        toastMsg: `${P.KINDS[k].icon} ${label} ${prev ? "modifié" : "ajouté"}`,
+      });
+      evForm.hidden = true;
+    });
+    $("#ev-list").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-act]");
+      if (!b) return;
+      const id = b.closest(".ev-item").dataset.id, ev = st.data.events.find((x) => x.id === id);
+      if (!ev) return;
+      if (b.dataset.act === "edit") return openEv(ev);
+      commit((d) => ({ ...d, events: d.events.filter((x) => x.id !== id) }), `Suppression : ${ev.title}`, {
+        undo: (d) => ({ ...d, events: d.events.filter((x) => x.id !== id).concat(ev) }),
+        toastMsg: `${ev.title} supprimé`,
+      });
+    });
 
     // Statistiques
     $("#stats-period").addEventListener("change", (e) => {
