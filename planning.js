@@ -43,7 +43,7 @@
   const DEFAULT = {
     version: 1,
     parents: { a: { name: "Papa", color: "#0f8b8d" }, b: { name: "Maman", color: "#e76f51" } },
-    rhythm: { preset: "alt1", first: "a", ref: "2026-11-16" },
+    rhythm: { preset: "alt1", first: "b", ref: "2026-11-16" },
     overrides: {},
   };
 
