@@ -57,6 +57,12 @@
       "date": "2026-12-13"
     },
     {
+      "id": "mwjetsmm",
+      "kind": "event",
+      "title": "Aligot Saucisse CCAM",
+      "date": "2027-01-09"
+    },
+    {
       "id": "mwjeig9k",
       "kind": "trail",
       "title": "Nimes Urban Trail",
@@ -69,5 +75,5 @@
       "date": "2027-03-12"
     }
   ],
-  "updated": "2026-11-16T15:19:40.270Z"
+  "updated": "2026-11-16T15:20:08.179Z"
 }
