@@ -51,6 +51,12 @@
       "date": "2026-11-28"
     },
     {
+      "id": "mwjovi3h",
+      "kind": "event",
+      "title": "Marché de Noël St Laurent",
+      "date": "2026-12-12"
+    },
+    {
       "id": "mwjei3r2",
       "kind": "trail",
       "title": "Hivernatrail",
@@ -75,5 +81,5 @@
       "date": "2027-03-12"
     }
   ],
-  "updated": "2026-11-16T15:20:08.179Z"
+  "updated": "2026-11-16T20:01:23.989Z"
 }
