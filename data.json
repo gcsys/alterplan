@@ -79,7 +79,14 @@
       "kind": "trail",
       "title": "Nocturne de Nimes",
       "date": "2027-03-12"
+    },
+    {
+      "id": "mwmk2s3u",
+      "kind": "anniv",
+      "title": "Gaël",
+      "date": "2027-04-07",
+      "year": 2027
     }
   ],
-  "updated": "2026-11-16T20:01:23.989Z"
+  "updated": "2026-11-18T20:10:24.003Z"
 }
