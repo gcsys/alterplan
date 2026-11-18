@@ -25,6 +25,13 @@
       "year": 1991
     },
     {
+      "id": "mwmk2s3u",
+      "kind": "anniv",
+      "title": "Gaël",
+      "date": "1992-04-07",
+      "year": 1992
+    },
+    {
       "id": "mwjehduw",
       "kind": "anniv",
       "title": "Giulia",
@@ -79,14 +86,7 @@
       "kind": "trail",
       "title": "Nocturne de Nimes",
       "date": "2027-03-12"
-    },
-    {
-      "id": "mwmk2s3u",
-      "kind": "anniv",
-      "title": "Gaël",
-      "date": "2027-04-07",
-      "year": 2027
     }
   ],
-  "updated": "2026-11-18T20:10:24.003Z"
+  "updated": "2026-11-18T20:10:48.828Z"
 }
