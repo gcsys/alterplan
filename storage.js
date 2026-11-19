@@ -12,7 +12,8 @@
   const PATH = "data.json";
   const BRANCH = "main";
 
-  /* gcsys.github.io/alterplan -> gcsys/alterplan ; sinon le réglage, sinon gcsys/alterplan. */
+  /* gcsys.github.io/alterplan -> gcsys/alterplan ; sinon le réglage, sinon gcsys/alterplan
+   * (cas du domaine alterplan.quiquandou.fr). */
   function guessRepo() {
     const saved = LS.get(K.repo);
     if (saved && /^[\w.-]+\/[\w.-]+$/.test(saved)) return saved;

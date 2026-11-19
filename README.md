@@ -1,7 +1,8 @@
 # alterplan
 
 Planning de garde partagé entre les deux parents : chez qui sont les enfants, jour après jour.
-Site statique hébergé sur GitHub Pages, sans serveur ni compte à créer.
+Site statique hébergé sur GitHub Pages, sans serveur ni compte à créer : https://alterplan.quiquandou.fr
+(domaine déclaré dans le fichier `CNAME` et dans Settings › Pages ; DNS : `alterplan` CNAME `gcsys.github.io.`).
 
 ## Ce que fait le site
 
