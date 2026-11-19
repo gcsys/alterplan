@@ -3,10 +3,10 @@ name: Déployer sur alterplan.quiquandou.fr (FTP)
 # À chaque push sur main (code ou planning), le site est envoyé par FTP sur l'hébergement.
 # Seuls les fichiers modifiés sont envoyés (état gardé sur le serveur : .ftp-deploy-sync-state.json).
 #
-# Réglages à créer dans GitHub › Settings › Secrets and variables › Actions :
-#   Secrets   : FTP_SERVER (ex. ftp.quiquandou.fr), FTP_USERNAME, FTP_PASSWORD
-#   Variables : FTP_DIR      dossier du sous-domaine sur le serveur, terminé par / (ex. /www/alterplan/)
-#               FTP_PROTOCOL ftp ou ftps (défaut : ftps)
+# Réglages dans l'environnement GitHub « FTP_ALTERPLAN_OVH » (Settings › Environments) :
+#   Secrets   : FTP_SERVER, FTP_USERNAME, FTP_PASSWORD
+#   Variables : FTP_DIR      dossier du sous-domaine sur le serveur OVH (le / final est ajouté au besoin)
+#               FTP_PROTOCOL facultatif : ftp (défaut) ou ftps
 #               FTP_PORT     facultatif (défaut : 21)
 # Tant que FTP_SERVER n'existe pas, le workflow s'arrête sans erreur.
 
@@ -22,11 +22,15 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: FTP_ALTERPLAN_OVH
+      url: https://alterplan.quiquandou.fr
     steps:
       - name: Identifiants FTP présents ?
         id: cfg
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_DIR: ${{ vars.FTP_DIR }}
         run: |
           if [ -z "$FTP_SERVER" ]; then
             echo "::notice::Secrets FTP absents : déploiement ignoré."
@@ -34,6 +38,10 @@ jobs:
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
+          dir="${FTP_DIR:-./}"
+          case "$dir" in */) ;; *) dir="$dir/" ;; esac
+          echo "Dossier cible : $dir"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
         if: steps.cfg.outputs.ok == 'true'
@@ -53,9 +61,9 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
+          protocol: ${{ vars.FTP_PROTOCOL || 'ftp' }}
           port: ${{ vars.FTP_PORT || 21 }}
-          server-dir: ${{ vars.FTP_DIR || './' }}
+          server-dir: ${{ steps.cfg.outputs.dir }}
           exclude: |
             **/.git*
             **/.git*/**
