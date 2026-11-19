@@ -1,0 +1,27 @@
+# alterplan · réglages Apache (ignoré si l'hébergement n'utilise pas Apache)
+
+# Toujours en HTTPS
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# Pas de liste de fichiers, pas d'accès à l'état du déploiement
+Options -Indexes
+<Files ".ftp-deploy-sync-state.json">
+  Require all denied
+</Files>
+
+# Le site est mis à jour à chaque push : le navigateur revalide plutôt que de garder une vieille version.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|js|css|json|webmanifest)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "\.(woff2|svg)$">
+    Header set Cache-Control "public, max-age=2592000"
+  </FilesMatch>
+</IfModule>
+
+AddType application/manifest+json .webmanifest

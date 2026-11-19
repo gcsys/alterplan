@@ -1,0 +1,66 @@
+name: Déployer sur alterplan.quiquandou.fr (FTP)
+
+# À chaque push sur main (code ou planning), le site est envoyé par FTP sur l'hébergement.
+# Seuls les fichiers modifiés sont envoyés (état gardé sur le serveur : .ftp-deploy-sync-state.json).
+#
+# Réglages à créer dans GitHub › Settings › Secrets and variables › Actions :
+#   Secrets   : FTP_SERVER (ex. ftp.quiquandou.fr), FTP_USERNAME, FTP_PASSWORD
+#   Variables : FTP_DIR      dossier du sous-domaine sur le serveur, terminé par / (ex. /www/alterplan/)
+#               FTP_PROTOCOL ftp ou ftps (défaut : ftps)
+#               FTP_PORT     facultatif (défaut : 21)
+# Tant que FTP_SERVER n'existe pas, le workflow s'arrête sans erreur.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ftp
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Identifiants FTP présents ?
+        id: cfg
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        run: |
+          if [ -z "$FTP_SERVER" ]; then
+            echo "::notice::Secrets FTP absents : déploiement ignoré."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ok == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.ok == 'true'
+        with: { node-version: 22 }
+
+      - name: Tests
+        if: steps.cfg.outputs.ok == 'true'
+        run: node --test tests/*.test.js
+
+      - name: Envoi FTP
+        if: steps.cfg.outputs.ok == 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
+          port: ${{ vars.FTP_PORT || 21 }}
+          server-dir: ${{ vars.FTP_DIR || './' }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+            .github/**
+            tests/**
+            package.json
+            README.md
+            CNAME
