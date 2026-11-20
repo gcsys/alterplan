@@ -496,3 +496,6 @@ body.locked #me-btn, body.locked #settings-btn { display: none; }
 .legal table { border-collapse: collapse; width: 100%; font-size: .9rem; }
 .legal th, .legal td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
 @media (max-width: 520px) { body:not(.locked) #theme-btn, body:not(.locked) .sync { display: none; } .top-actions { gap: 6px; } }
+.name-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: -4px; }
+.name-chips small { flex-basis: 100%; font-size: .78rem; }
+.acc-names { margin: 2px 0 6px; }

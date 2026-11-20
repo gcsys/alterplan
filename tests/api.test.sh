@@ -107,7 +107,7 @@ check "préférences relues" "$(get "$J1" prefs)" 'gael@example.org'
 check "e-mail de test" "$(post "$J1" testmail '{}')" '"ok":true'
 check "cron HTTP sans clé refusé" "$(get "$J1" cron)" 'refusé'
 V=$(get "$J2" status | sed -E 's/.*"version":([0-9]+).*/\1/')
-check "Maman modifie" "$(post "$J2" save "{\"data\":{\"rhythm\":{\"preset\":\"alt1\",\"first\":\"b\",\"ref\":\"2026-11-16\"},\"events\":[{\"id\":\"t\",\"kind\":\"trail\",\"title\":\"Trail test\",\"date\":\"2026-11-30\"}],\"overrides\":{}},\"version\":$V,\"message\":\"Ajout : Trail test\"}")" '"ok":true'
+check "Maman modifie" "$(post "$J2" save "{\"data\":{\"parents\":{\"a\":{\"name\":\"Papa\"},\"b\":{\"name\":\"Maman\"}},\"rhythm\":{\"preset\":\"alt1\",\"first\":\"b\",\"ref\":\"2026-11-16\"},\"events\":[{\"id\":\"t\",\"kind\":\"trail\",\"title\":\"Trail test\",\"date\":\"2026-11-30\"}],\"overrides\":{}},\"version\":$V,\"message\":\"Ajout : Trail test\"}")" '"ok":true'
 if [ -n "${ALTERPLAN_CONFIG:-}" ]; then
   # dimanche 22/11 : changement de garde le lendemain (chez Papa) ; lundi 23 : trail dans 7 jours + semaine
   check "cron dimanche" "$(php "$(dirname "$0")/../api/cron.php" today=2026-11-22 hour=8)" '"daily":2'

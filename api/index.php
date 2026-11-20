@@ -646,7 +646,7 @@ switch ($action) {
         out(['ok' => true]);
     }
 
-    case 'profile': { // prénom (compte) et rôle dans le planning courant (Papa, Maman ou aucun)
+    case 'profile': { // prénom (compte) et rôle dans le planning courant (l'un des deux parents, ou aucun)
         $post();
         $u = $needUser();
         $name = $str('name', 64) ?: $u['name'];

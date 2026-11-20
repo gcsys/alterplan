@@ -993,7 +993,7 @@
       info = await S.Api.get("inviteinfo", `&token=${encodeURIComponent(inv)}`).catch(() => ({ valid: false }));
       if (!info.valid) { clearUrl(); toast("Ce lien d'invitation n'est plus valable : demande-en un nouveau."); return logged ? startApi() : showAuth("login"); }
     }
-    const names = info && info.names ? info.names : { a: "Papa", b: "Maman" };
+    const names = info && info.names ? info.names : { a: "Parent 1", b: "Parent 2" };
     const mon = P.mondayOf(today());
     const forms = {
       login: `<h1>Connexion</h1>
@@ -1025,7 +1025,8 @@
         <p class="auth-links"><button type="button" class="link-btn" data-go="skip">Plus tard</button></p>`,
       create: `<h1>${hasPlannings() ? "Nouveau planning" : "Ton planning"}</h1><p class="muted">Quelques réglages pour démarrer : tout se modifie ensuite.</p>
         <label>Nom du planning<input type="text" name="pname" maxlength="80" placeholder="Garde de Léa et Tom" required></label>
-        <div class="row2"><label>Parent 1<input type="text" name="na" maxlength="24" value="Papa" required></label><label>Parent 2<input type="text" name="nb" maxlength="24" value="Maman" required></label></div>
+        <div class="row2"><label>Premier parent<input type="text" name="na" maxlength="24" placeholder="Papa, Maman, Julie…" required></label><label>Second parent<input type="text" name="nb" maxlength="24" placeholder="Papa, Maman, Marc…" required></label></div>
+        <div class="name-chips" role="group" aria-label="Suggestions">${["Papa", "Maman"].map((n) => `<button type="button" class="chip" data-chip="${n}">${n}</button>`).join("")}<small class="muted">Un prénom ou ce que disent les enfants. Deux papas, deux mamans : aucun souci.</small></div>
         <span class="lbl">Toi, tu es</span><div data-pick="me">${whoPick(names, "a", "Ni l'un ni l'autre")}</div>
         <label>Rythme<select name="preset">${Object.entries(P.PRESETS).map(([k, p]) => `<option value="${k}" title="${esc(p.hint)}">${esc(p.label)}</option>`).join("")}</select></label>
         <span class="lbl" id="cr-who-lbl">Cette semaine (du ${esc(P.shortDate(mon))}), les enfants sont chez</span><div data-pick="who">${whoPick(names, "a")}</div>
@@ -1055,6 +1056,13 @@
     form.addEventListener("click", async (e) => {
       const b = e.target.closest(".who-pick button");
       if (b) $$("button", b.parentNode).forEach((x) => x.classList.toggle("on", x === b));
+      const chip = e.target.closest("[data-chip]");
+      if (chip) { // remplit le premier champ vide (ou le second)
+        const t = !form.na.value.trim() ? form.na : form.nb;
+        t.value = chip.dataset.chip;
+        t.dispatchEvent(new Event("input", { bubbles: true }));
+        return;
+      }
       const go = e.target.closest("[data-go]");
       if (!go) return;
       if (go.dataset.go === "skip") { clearUrl(); return startApi(); }
@@ -1117,7 +1125,7 @@
           const preset = f.preset;
           const data = {
             version: 1,
-            parents: { a: { name: f.na.trim() || "Papa", color: P.DEFAULT.parents.a.color }, b: { name: f.nb.trim() || "Maman", color: P.DEFAULT.parents.b.color } },
+            parents: { a: { name: f.na.trim() || "Parent 1", color: P.DEFAULT.parents.a.color }, b: { name: f.nb.trim() || "Parent 2", color: P.DEFAULT.parents.b.color } },
             rhythm: { preset, first: preset === "none" ? P.other(who) : who, ref: mon },
             overrides: {}, events: [],
           };
@@ -1146,6 +1154,7 @@
     const u = S.status.user, pl = S.status.planning;
     sec.innerHTML = `<h3>Planning « ${esc(pl.name)} »</h3>
       ${u.admin ? `<form class="token-row" id="pl-name"><input type="text" name="name" value="${esc(pl.name)}" maxlength="80" aria-label="Nom du planning" required><button class="btn small">Renommer</button></form>` : ""}
+      <p class="acc-names small"><button type="button" class="link-btn" id="go-parents">Noms et couleurs des deux parents</button></p>
       <div class="acc-role"><span class="small muted">Dans ce planning, je suis</span>
         <div class="seg" id="acc-parent" role="radiogroup" aria-label="Mon rôle">
           ${[["a", name("a")], ["b", name("b")], ["", "Ni l'un ni l'autre"]].map(([v, l]) => `<button type="button" role="radio" data-p="${v}" class="${(u.parent || "") === v ? "active" : ""}" aria-checked="${(u.parent || "") === v}">${esc(l)}</button>`).join("")}
@@ -1213,6 +1222,7 @@
         render();
       } catch (err) { toast(err.message); }
     };
+    $("#go-parents").onclick = () => document.getElementById("sec-parents").scrollIntoView({ behavior: "smooth", block: "start" });
     const plName = $("#pl-name");
     if (plName) plName.onsubmit = async (e) => {
       e.preventDefault();

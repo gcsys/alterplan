@@ -42,7 +42,7 @@
 
   const DEFAULT = {
     version: 1,
-    parents: { a: { name: "Papa", color: "#0f8b8d" }, b: { name: "Maman", color: "#e76f51" } },
+    parents: { a: { name: "Parent 1", color: "#0f8b8d" }, b: { name: "Parent 2", color: "#e76f51" } },
     rhythm: { preset: "alt1", first: "b", ref: "2026-11-16" },
     overrides: {},
   };
@@ -64,8 +64,8 @@
     return {
       version: 1,
       parents: {
-        a: { name: name(p.a && p.a.name, "Papa"), color: color(p.a && p.a.color, DEFAULT.parents.a.color) },
-        b: { name: name(p.b && p.b.name, "Maman"), color: color(p.b && p.b.color, DEFAULT.parents.b.color) },
+        a: { name: name(p.a && p.a.name, DEFAULT.parents.a.name), color: color(p.a && p.a.color, DEFAULT.parents.a.color) },
+        b: { name: name(p.b && p.b.name, DEFAULT.parents.b.name), color: color(p.b && p.b.color, DEFAULT.parents.b.color) },
       },
       rhythm: {
         preset: PRESETS[rh.preset] ? rh.preset : "alt1",

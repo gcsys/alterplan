@@ -29,7 +29,7 @@ function ap_norm($raw): array
     $p = $r['parents'] ?? [];
     $rh = $r['rhythm'] ?? [];
     return [
-        'names' => ['a' => trim((string)($p['a']['name'] ?? '')) ?: 'Papa', 'b' => trim((string)($p['b']['name'] ?? '')) ?: 'Maman'],
+        'names' => ['a' => trim((string)($p['a']['name'] ?? '')) ?: 'Parent 1', 'b' => trim((string)($p['b']['name'] ?? '')) ?: 'Parent 2'],
         'preset' => isset(AP_PRESETS[$rh['preset'] ?? '']) ? $rh['preset'] : 'alt1',
         'first' => in_array($rh['first'] ?? '', ['a', 'b'], true) ? $rh['first'] : 'a',
         'ref' => ap_isIso($rh['ref'] ?? null) ? $rh['ref'] : '2026-11-16',
