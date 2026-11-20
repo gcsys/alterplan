@@ -10,10 +10,16 @@
  */
 declare(strict_types=1);
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
-header('X-Content-Type-Options: nosniff');
-header('Referrer-Policy: same-origin');
+require __DIR__ . '/planning.php';
+require __DIR__ . '/notify.php';
+date_default_timezone_set('Europe/Paris');
+$cli = PHP_SAPI === 'cli';
+if (!$cli) header('Content-Type: application/json; charset=utf-8');
+if (!$cli) {
+    header('Cache-Control: no-store');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: same-origin');
+}
 
 const COOKIE = 'ap_session';
 const SESSION_DAYS = 180;
@@ -67,6 +73,11 @@ function schema(PDO $db, bool $mysql): void
         token CHAR(64) NOT NULL PRIMARY KEY, parent CHAR(1) NULL, created_by INT NOT NULL,
         expires DATETIME NOT NULL, used TINYINT NOT NULL DEFAULT 0)$tail");
     $db->exec("CREATE TABLE IF NOT EXISTS ap_attempts (ip VARCHAR(64) NOT NULL, at DATETIME NOT NULL)$tail");
+    $db->exec("CREATE TABLE IF NOT EXISTS ap_sent (k VARCHAR(190) NOT NULL PRIMARY KEY, at DATETIME NOT NULL)$tail");
+    // Colonnes ajoutées après coup (notifications) : ignorées si elles existent déjà.
+    foreach (['email VARCHAR(190) NULL', 'prefs TEXT NULL', 'notified_version INT NULL'] as $col) {
+        try { $db->exec("ALTER TABLE ap_users ADD COLUMN $col"); } catch (Throwable $e) { /* déjà là */ }
+    }
 }
 try {
     schema($db, $mysql);
@@ -98,7 +109,7 @@ function setCookieToken(string $value, int $expires, bool $https): void
 }
 function publicUser(?array $u): ?array
 {
-    return $u ? ['id' => (int)$u['id'], 'login' => $u['login'], 'name' => $u['name'], 'parent' => $u['parent'], 'admin' => (bool)$u['admin']] : null;
+    return $u ? ['id' => (int)$u['id'], 'login' => $u['login'], 'name' => $u['name'], 'parent' => $u['parent'], 'admin' => (bool)$u['admin'], 'notify' => !empty($u['email'])] : null;
 }
 function validParent($p): ?string
 {
@@ -319,6 +330,44 @@ switch ($action) {
         $db->prepare('DELETE FROM ap_sessions WHERE user_id = ?')->execute([$id]);
         $db->prepare('DELETE FROM ap_users WHERE id = ?')->execute([$id]);
         out(['ok' => true]);
+    }
+
+    case 'prefs': {
+        $u = $needUser();
+        if ($method === 'POST') {
+            $email = trim((string)($body['email'] ?? ''));
+            if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('Adresse e-mail invalide.');
+            $prefs = ap_prefs($body['prefs'] ?? []);
+            $cur = planning($db);
+            $db->prepare('UPDATE ap_users SET email = ?, prefs = ?, notified_version = COALESCE(notified_version, ?) WHERE id = ?')
+                ->execute([$email ?: null, json_encode($prefs), $cur['version'] ?? 0, $u['id']]);
+            out(['ok' => true, 'email' => $email, 'prefs' => $prefs]);
+        }
+        out(['email' => $u['email'] ?? '', 'prefs' => ap_prefs($u['prefs'] ?? null)]);
+    }
+
+    case 'testmail': {
+        if ($method !== 'POST') fail('POST attendu.', 405);
+        $u = $needUser();
+        if (empty($u['email'])) fail("Enregistre d'abord ton adresse e-mail.");
+        $p = ap_norm(planning($db)['data'] ?? []);
+        $today = date('Y-m-d');
+        $w = ap_who($p, $today);
+        $html = ap_mailHtml($cfg, 'E-mail de test', [['Tout fonctionne', [
+            "Bonjour {$u['name']}, les rappels d'alterplan arriveront à cette adresse.",
+            "Aujourd'hui, les enfants sont chez " . ap_h($p['names'][$w]) . '.',
+        ]]]);
+        if (!ap_sendMail($cfg, $u['email'], 'alterplan · e-mail de test', $html)) fail("L'hébergement a refusé l'envoi.", 502);
+        out(['ok' => true]);
+    }
+
+    case 'cron': {
+        // Tâche planifiée : en ligne de commande (cron OVH) ou par HTTP avec la clé cron_key.
+        $key = (string)($cfg['cron_key'] ?? '');
+        if (!$cli && ($key === '' || !hash_equals($key, (string)($_GET['key'] ?? '')))) fail('Accès refusé.', 403);
+        $today = ap_isIso($_GET['today'] ?? null) ? $_GET['today'] : date('Y-m-d');
+        $hour = isset($_GET['hour']) ? (int)$_GET['hour'] : (int)date('G');
+        out(['ok' => true, 'today' => $today] + ap_runNotifications($db, $cfg, $today, $hour, !empty($_GET['force'])));
     }
 
     default:

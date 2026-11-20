@@ -40,6 +40,28 @@ check "mauvais mot de passe" "$(post "$J2" login '{"login":"maman","password":"f
 check "connexion" "$(post "$J2" login '{"login":"MAMAN","password":"motdepasse2"}')" '"ok":true'
 check "changement de mot de passe" "$(post "$J2" password '{"old":"motdepasse2","new":"nouveau-mdp"}')" '"ok":true'
 check "action inconnue" "$(get "$J1" nimportequoi)" 'inconnue'
+
+# Notifications (MAIL_LOG : fichier où l'API écrit les e-mails au lieu de les envoyer)
+if [ -n "${MAIL_LOG:-}" ] && [ -n "${ALTERPLAN_CONFIG:-}" ]; then
+  : > "$MAIL_LOG"
+  check "e-mail invalide" "$(post "$J1" prefs '{"email":"pas-un-mail","prefs":{}}')" 'invalide'
+  check "préférences" "$(post "$J1" prefs '{"email":"gael@example.org","prefs":{"before":[1,7],"switch":true,"weekly":true,"changes":true}}')" '"before":\[1,7\]'
+  check "préférences relues" "$(get "$J1" prefs)" 'gael@example.org'
+  check "e-mail de test" "$(post "$J1" testmail '{}')" '"ok":true'
+  check "cron HTTP sans clé refusé" "$(get "$J1" cron)" 'refusé'
+  V=$(get "$J2" status | sed -E 's/.*"version":([0-9]+).*/\1/')
+  check "Maman modifie" "$(post "$J2" save "{\"data\":{\"rhythm\":{\"preset\":\"alt1\",\"first\":\"b\",\"ref\":\"2026-11-16\"},\"events\":[{\"id\":\"t\",\"kind\":\"trail\",\"title\":\"Trail test\",\"date\":\"2026-11-30\"}],\"overrides\":{}},\"version\":$V,\"message\":\"Ajout : Trail test\"}")" '"ok":true'
+  # dimanche 22/11 : changement de garde le lendemain (chez Papa) ; lundi 23 : trail dans 7 jours + semaine
+  check "cron dimanche" "$(php "$(dirname "$0")/../api/cron.php" today=2026-11-22 hour=8)" '"daily":1'
+  check "cron une fois par jour" "$(php "$(dirname "$0")/../api/cron.php" today=2026-11-22 hour=9)" '"daily":0'
+  check "cron lundi" "$(php "$(dirname "$0")/../api/cron.php" today=2026-11-23 hour=8)" '"daily":1'
+  M=$(cat "$MAIL_LOG")
+  check "mail de test envoyé" "$M" 'e-mail de test'
+  check "résumé des modifications de Maman" "$M" 'Planning modifié par Maman'
+  check "rappel de changement de garde" "$M" 'Demain, les enfants vont chez toi'
+  check "rappel d'événement à J-7" "$M" 'Dans 7 jours'
+  check "résumé de la semaine" "$M" 'Ta semaine'
+fi
 rm -f "$J1" "$J2"
 echo "échecs : $fails"
 exit $fails

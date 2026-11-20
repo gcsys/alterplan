@@ -1000,6 +1000,22 @@
         <div class="row-btns"><button type="button" class="btn small" data-inv="b">Inviter ${esc(name("b"))}</button><button type="button" class="btn small" data-inv="a">Inviter ${esc(name("a"))}</button></div>
         <div class="inv-out" id="inv-out" hidden><input readonly id="inv-link" aria-label="Lien d'invitation"><button type="button" class="btn small primary" id="inv-copy">Copier</button></div>
       </div>` : ""}
+      <details class="acc-notif" id="acc-notif"><summary>Notifications par e-mail</summary>
+        <form id="notif-form" class="notif-form">
+          <label class="full">Adresse e-mail<input type="email" name="email" placeholder="prenom@exemple.fr" autocomplete="email"></label>
+          <fieldset><legend>Rappels d'événements</legend>
+            <label class="check"><input type="checkbox" name="b0"> Le jour même</label>
+            <label class="check"><input type="checkbox" name="b1"> La veille</label>
+            <label class="check"><input type="checkbox" name="b7"> Une semaine avant</label>
+          </fieldset>
+          <fieldset><legend>Garde</legend>
+            <label class="check"><input type="checkbox" name="switch"> La veille d'un changement de garde</label>
+            <label class="check"><input type="checkbox" name="weekly"> Résumé de la semaine, le lundi matin</label>
+            <label class="check"><input type="checkbox" name="changes"> Modifications faites par les autres</label>
+          </fieldset>
+          <p class="muted small">Les rappels partent chaque matin vers 7 h, les modifications dans l'heure.</p>
+          <div class="row-btns"><button class="btn small primary">Enregistrer</button><button type="button" class="btn small" id="notif-test">Envoyer un e-mail de test</button></div>
+        </form></details>
       <details class="acc-pass"><summary>Changer de mot de passe</summary>
         <form id="acc-pass" class="token-row">
           <input type="password" name="old" placeholder="Actuel" autocomplete="current-password" required>
@@ -1040,6 +1056,26 @@
       const url = $("#inv-link").value;
       if (navigator.share) { try { await navigator.share({ title: "alterplan", text: "Invitation au planning de garde", url }); return; } catch (e) { /* annulé */ } }
       try { await navigator.clipboard.writeText(url); toast("Lien copié."); } catch (e) { $("#inv-link").select(); }
+    };
+    const nf = $("#notif-form");
+    S.Api.get("prefs").then((j) => {
+      nf.email.value = j.email || "";
+      for (const n of [0, 1, 7]) nf[`b${n}`].checked = j.prefs.before.includes(n);
+      for (const k of ["switch", "weekly", "changes"]) nf[k].checked = !!j.prefs[k];
+      if (!j.email) $("#acc-notif").open = true;
+    }).catch(() => {});
+    const savePrefs = () => S.Api.post("prefs", {
+      email: nf.email.value.trim(),
+      prefs: { before: [0, 1, 7].filter((n) => nf[`b${n}`].checked), switch: nf.switch.checked, weekly: nf.weekly.checked, changes: nf.changes.checked },
+    });
+    nf.onsubmit = async (e) => {
+      e.preventDefault();
+      try { const j = await savePrefs(); toast(j.email ? "Notifications enregistrées." : "Notifications désactivées (pas d'adresse)."); }
+      catch (err) { toast(err.message); }
+    };
+    $("#notif-test").onclick = async () => {
+      try { await savePrefs(); await S.Api.post("testmail"); toast(`E-mail de test envoyé à ${nf.email.value.trim()}.`); }
+      catch (err) { toast(err.message); }
     };
     $("#acc-pass").onsubmit = async (e) => {
       e.preventDefault();

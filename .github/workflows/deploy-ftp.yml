@@ -63,6 +63,7 @@ jobs:
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           SETUP_CODE: ${{ secrets.SETUP_CODE }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
         run: |
           if [ -z "$DB_HOST" ] || [ -z "$DB_NAME" ]; then
             echo "::notice::Secrets DB_* absents : pas de comptes, le site reste en mode data.json."
@@ -71,7 +72,8 @@ jobs:
           # var_export échappe les valeurs : aucun secret n'est interprété ni affiché.
           php -r '
             $c = ["dsn" => "mysql:host=" . getenv("DB_HOST") . ";dbname=" . getenv("DB_NAME") . ";charset=utf8mb4",
-                  "user" => getenv("DB_USER"), "pass" => getenv("DB_PASSWORD"), "setup_code" => (string)getenv("SETUP_CODE")];
+                  "user" => getenv("DB_USER"), "pass" => getenv("DB_PASSWORD"), "setup_code" => (string)getenv("SETUP_CODE"),
+                  "mail_from" => getenv("MAIL_FROM") ?: "alterplan@quiquandou.fr", "site_url" => "https://alterplan.quiquandou.fr"];
             file_put_contents("api/config.php", "<?php\n// Généré au déploiement depuis les secrets GitHub. Ne pas versionner.\nreturn " . var_export($c, true) . ";\n");
           '
           php -l api/config.php
@@ -80,8 +82,9 @@ jobs:
         if: steps.cfg.outputs.ok == 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/api"
-          echo "<?php return ['dsn' => 'sqlite:$RUNNER_TEMP/api/t.sqlite', 'user' => null, 'pass' => null, 'setup_code' => 'secret-code'];" > "$RUNNER_TEMP/api/config.php"
-          ALTERPLAN_CONFIG="$RUNNER_TEMP/api/config.php" php -S 127.0.0.1:8770 >/dev/null 2>&1 &
+          echo "<?php return ['dsn' => 'sqlite:$RUNNER_TEMP/api/t.sqlite', 'user' => null, 'pass' => null, 'setup_code' => 'secret-code', 'mail_log' => '$RUNNER_TEMP/api/mails.log'];" > "$RUNNER_TEMP/api/config.php"
+          export ALTERPLAN_CONFIG="$RUNNER_TEMP/api/config.php" MAIL_LOG="$RUNNER_TEMP/api/mails.log"
+          php -S 127.0.0.1:8770 >/dev/null 2>&1 &
           for i in $(seq 1 20); do curl -s 127.0.0.1:8770 >/dev/null && break; sleep 0.3; done
           bash tests/api.test.sh http://127.0.0.1:8770
 
