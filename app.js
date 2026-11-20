@@ -607,6 +607,10 @@
       st.me = dlgMe.returnValue;
       LS.set("alterplan.me", st.me);
       render();
+      if (S.backend === "api" && S.status && S.status.user) { // en mode comptes, le rôle est enregistré dans le planning
+        S.Api.post("profile", { name: S.status.user.name, parent: st.me === "a" || st.me === "b" ? st.me : null })
+          .then(() => S.refresh()).catch(() => {});
+      }
     });
 
     // Exceptions
@@ -866,8 +870,18 @@
     setSync("loading");
     const api = await S.detect();
     if (api) {
-      $("#foot-txt").textContent = "alterplan · planning partagé, privé, enregistré sur cet hébergement.";
-      if (!api.user) return showAuth();
+      $("#foot-txt").textContent = "alterplan · planning de garde partagé, privé, hébergé en France.";
+      bindPlanMenu();
+      if (urlToken("confirmer")) { // lien de confirmation reçu par e-mail
+        try {
+          const j = await S.Api.post("confirm", { token: urlToken("confirmer") });
+          toast(j.kind === "email" ? "Nouvelle adresse confirmée." : "Adresse confirmée, bienvenue !");
+        } catch (e) { toast(e.message); }
+        params.delete("confirmer");
+        history.replaceState(null, "", location.pathname + (params.toString() ? `?${params}` : ""));
+        await S.refresh();
+      }
+      if (!S.status.user) return showAuth();
       return startApi();
     }
     const { data, source } = await S.load();
@@ -885,124 +899,280 @@
   }
   /* ===== Mode comptes (API PHP) ===== */
   let watching = false;
+  const params = new URLSearchParams(location.search);
+  const urlToken = (k) => params.get(k) || "";
+  const clearUrl = () => { for (const k of ["invitation", "confirmer", "reinitialiser"]) params.delete(k); history.replaceState(null, "", location.pathname); };
+  const hasPlannings = () => !!(S.status && S.status.plannings && S.status.plannings.length);
+  const legalLinks = `<p class="legal-links"><a href="mentions-legales.html">Mentions légales</a><a href="confidentialite.html">Confidentialité</a><a href="cgu.html">Conditions d'utilisation</a></p>`;
+
   async function startApi() {
+    if (urlToken("invitation")) return showAuth("join");
+    if (!hasPlannings()) return showAuth("create");
     hideAuth();
     const u = S.status.user;
     if (S.status.data) st.data = P.clean(S.status.data);
-    if (!st.me) { st.me = u.parent || "none"; LS.set("alterplan.me", st.me); } // l'admin regarde sans être un parent
+    st.me = u.parent || "none"; // rôle dans ce planning (l'admin peut ne pas être un parent)
+    LS.set("alterplan.me", st.me);
+    renderPlanBtn();
     await connect();
     if (watching) return;
     watching = true;
     document.addEventListener("visibilitychange", async () => {
-      if (document.visibilityState !== "visible" || st.pending.length || st.saving) return;
+      if (S.backend !== "api" || document.visibilityState !== "visible" || st.pending.length || st.saving) return;
       const r = await S.load();
       if (r.source === "auth") return showAuth();
-      if (r.data && !st.pending.length) { st.data = P.clean(r.data); render(); }
+      if (r.data && !st.pending.length) { st.data = P.clean(r.data); renderPlanBtn(); render(); }
     });
+  }
+  async function switchPlanning(id) {
+    if (st.pending.length) { clearTimeout(saveTimer); await flush(); }
+    S.setPlanning(id);
+    await S.refresh();
+    if (dlgSet.open) dlgSet.close();
+    await startApi();
+    if (S.status.planning) toast(`Planning « ${S.status.planning.name} »`);
+  }
+  /* Bouton du planning courant (en-tête) et menu pour en changer ou en créer un. */
+  function renderPlanBtn() {
+    const pl = S.status && S.status.planning;
+    $("#plan-btn").hidden = !pl;
+    if (pl) $("#plan-name").textContent = pl.name;
+  }
+  function bindPlanMenu() {
+    const btn = $("#plan-btn"), menu = $("#plan-menu");
+    const close = () => { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      if (!menu.hidden) return close();
+      const cur = S.status.planning ? S.status.planning.id : 0;
+      menu.innerHTML = `<p class="pm-h">Mes plannings</p>${S.status.plannings.map((p) => `<button type="button" role="menuitemradio" aria-checked="${p.id === cur}" data-plan="${p.id}" class="${p.id === cur ? "on" : ""}">
+          <span>${esc(p.name)}</span><small>${p.role === "admin" ? "admin" : "membre"}</small></button>`).join("")}
+        <button type="button" role="menuitem" data-plan="new" class="pm-new">+ Nouveau planning</button>`;
+      menu.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+    };
+    menu.onclick = (e) => {
+      const b = e.target.closest("[data-plan]");
+      if (!b) return;
+      close();
+      if (b.dataset.plan === "new") return showAuth("create");
+      if (Number(b.dataset.plan) !== S.pid) switchPlanning(b.dataset.plan);
+    };
+    document.addEventListener("click", (e) => { if (!menu.hidden && !menu.contains(e.target)) close(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
   }
   function hideAuth() {
     $("#auth").hidden = true;
     $("#main").hidden = false;
     document.body.classList.remove("locked");
   }
-  const inviteToken = () => new URLSearchParams(location.search).get("invitation") || "";
+  const whoPick = (names, sel, none) => `<div class="who-pick" role="radiogroup">
+      <button type="button" data-w="a" class="wp-a${sel === "a" ? " on" : ""}">${esc(names.a)}</button>
+      <button type="button" data-w="b" class="wp-b${sel === "b" ? " on" : ""}">${esc(names.b)}</button>
+      ${none ? `<button type="button" data-w="" class="wp-n${sel === "" ? " on" : ""}">${esc(none)}</button>` : ""}</div>`;
+  const pwd = (n = "password", ph = "") => `<label>Mot de passe<input name="${n}" type="password" autocomplete="new-password" minlength="8" required ${ph}><small>8 caractères minimum.</small></label>`;
+
   async function showAuth(view) {
     $("#main").hidden = true;
+    $("#plan-btn").hidden = true;
     document.body.classList.add("locked");
     setSync("");
     const box = $("#auth");
     box.hidden = false;
-    const token = inviteToken();
+    const s = S.status || {};
+    const logged = !!s.user;
+    const inv = urlToken("invitation");
     let info = null;
     if (!view) {
-      if (S.status && S.status.needsSetup) view = "setup";
-      else if (token) {
-        info = await S.Api.get("inviteinfo", `&token=${encodeURIComponent(token)}`).catch(() => ({ valid: false }));
-        view = info.valid ? "register" : "login";
-      } else view = "login";
+      if (s.needsSetup) view = "setup";
+      else if (urlToken("reinitialiser")) view = "reset";
+      else if (inv) view = logged ? "join" : "signup";
+      else view = logged ? (hasPlannings() ? "login" : "create") : "login";
     }
-    const parentPick = (sel) => `<div class="who-pick" data-field="parent" role="radiogroup" aria-label="Tu es">
-        <button type="button" data-w="a" class="wp-a${sel === "a" ? " on" : ""}">${esc(name("a"))}</button>
-        <button type="button" data-w="b" class="wp-b${sel === "b" ? " on" : ""}">${esc(name("b"))}</button></div>`;
+    if (inv && (view === "signup" || view === "join")) {
+      info = await S.Api.get("inviteinfo", `&token=${encodeURIComponent(inv)}`).catch(() => ({ valid: false }));
+      if (!info.valid) { clearUrl(); toast("Ce lien d'invitation n'est plus valable : demande-en un nouveau."); return logged ? startApi() : showAuth("login"); }
+    }
+    const names = info && info.names ? info.names : { a: "Papa", b: "Maman" };
+    const mon = P.mondayOf(today());
     const forms = {
-      login: `<h1>Connexion</h1><p class="muted">Le planning est privé : connecte-toi pour le voir et le modifier.</p>
-        ${token ? `<p class="err">Ce lien d'invitation n'est plus valable. Demande-en un nouveau.</p>` : ""}
-        <label>Identifiant<input type="text" name="login" autocomplete="username" autocapitalize="none" required></label>
+      login: `<h1>Connexion</h1>
+        <label>E-mail ou identifiant<input type="text" name="login" autocomplete="username" autocapitalize="none" required></label>
         <label>Mot de passe<input name="password" type="password" autocomplete="current-password" required></label>
-        <button class="btn primary" type="submit">Se connecter</button>`,
-      setup: `<h1>Bienvenue</h1><p class="muted">Première connexion : crée le compte administrateur. Il gère les comptes (invitations des parents) sans être Papa ni Maman. Le planning actuel sera importé.</p>
-        <label>Code d'installation<input name="code" type="password" autocomplete="off" required><small>Le secret SETUP_CODE mis dans GitHub. Les parents n'en ont pas besoin : ils reçoivent un lien d'invitation.</small></label>
+        <button class="btn primary" type="submit">Se connecter</button>
+        <p class="auth-links"><button type="button" class="link-btn" data-go="forgot">Mot de passe oublié ?</button>
+        ${s.signup ? `<span>Pas encore de compte ? <button type="button" class="link-btn" data-go="signup">Créer un compte</button></span>` : ""}</p>`,
+      signup: `${info ? `<h1>Invitation</h1><p class="muted">${esc(info.from || "On")} t'invite à rejoindre le planning <strong>« ${esc(info.planning)} »</strong>.</p>
+          <span class="lbl">Dans ce planning, tu es</span>${whoPick(names, info.parent || "", "Ni l'un ni l'autre")}`
+          : `<h1>Créer un compte</h1><p class="muted">Gratuit. Tu pourras ensuite créer ton planning et inviter l'autre parent.</p>`}
+        <label>Ton prénom<input type="text" name="name" autocomplete="given-name" maxlength="64" required></label>
+        <label>E-mail<input type="email" name="email" autocomplete="email" autocapitalize="none" required><small>Pour te connecter et recevoir les rappels. Un lien de confirmation y sera envoyé.</small></label>
+        ${pwd()}
+        <label class="check terms"><input type="checkbox" name="terms" required> <span>J'accepte les <a href="cgu.html" target="_blank">conditions d'utilisation</a> et la <a href="confidentialite.html" target="_blank">politique de confidentialité</a>.</span></label>
+        <button class="btn primary" type="submit">Créer mon compte</button>
+        <p class="auth-links"><span>Déjà un compte ? <button type="button" class="link-btn" data-go="login">Se connecter</button></span></p>`,
+      sent: `<h1>Vérifie tes e-mails</h1><p>Un lien de confirmation vient de partir à <strong>${esc(st.sentTo || "ton adresse")}</strong>. Clique dessus pour activer ton compte${inv ? " et rejoindre le planning" : ""}.</p>
+        <p class="muted small">Rien reçu ? Regarde dans les indésirables. Le lien est valable 3 jours ; en te connectant, un nouveau lien est envoyé.</p>
+        <button class="btn" type="button" data-go="login">Retour à la connexion</button>`,
+      forgot: `<h1>Mot de passe oublié</h1><p class="muted">Indique l'adresse de ton compte : tu recevras un lien pour choisir un nouveau mot de passe.</p>
+        <label>E-mail<input type="email" name="email" autocomplete="email" autocapitalize="none" required></label>
+        <button class="btn primary" type="submit">Envoyer le lien</button>
+        <p class="auth-links"><button type="button" class="link-btn" data-go="login">Retour à la connexion</button></p>`,
+      reset: `<h1>Nouveau mot de passe</h1>${pwd()}<button class="btn primary" type="submit">Enregistrer et me connecter</button>`,
+      join: `<h1>Invitation</h1><p class="muted">${esc(info && info.from || "On")} t'invite à rejoindre le planning <strong>« ${esc(info && info.planning || "")} »</strong>.</p>
+        <span class="lbl">Dans ce planning, tu es</span>${whoPick(names, info && info.parent || "", "Ni l'un ni l'autre")}
+        <button class="btn primary" type="submit">Rejoindre le planning</button>
+        <p class="auth-links"><button type="button" class="link-btn" data-go="skip">Plus tard</button></p>`,
+      create: `<h1>${hasPlannings() ? "Nouveau planning" : "Ton planning"}</h1><p class="muted">Quelques réglages pour démarrer : tout se modifie ensuite.</p>
+        <label>Nom du planning<input type="text" name="pname" maxlength="80" placeholder="Garde de Léa et Tom" required></label>
+        <div class="row2"><label>Parent 1<input type="text" name="na" maxlength="24" value="Papa" required></label><label>Parent 2<input type="text" name="nb" maxlength="24" value="Maman" required></label></div>
+        <span class="lbl">Toi, tu es</span><div data-pick="me">${whoPick(names, "a", "Ni l'un ni l'autre")}</div>
+        <label>Rythme<select name="preset">${Object.entries(P.PRESETS).map(([k, p]) => `<option value="${k}" title="${esc(p.hint)}">${esc(p.label)}</option>`).join("")}</select></label>
+        <span class="lbl" id="cr-who-lbl">Cette semaine (du ${esc(P.shortDate(mon))}), les enfants sont chez</span><div data-pick="who">${whoPick(names, "a")}</div>
+        <button class="btn primary" type="submit">Créer le planning</button>
+        <p class="auth-links">${hasPlannings() ? `<button type="button" class="link-btn" data-go="skip">Annuler</button>` : `<span>Connecté : ${esc(s.user ? s.user.email || s.user.login : "")}</span><button type="button" class="link-btn" data-go="logout">Se déconnecter</button>`}</p>`,
+      setup: `<h1>Bienvenue</h1><p class="muted">Installation : crée le compte administrateur du site. Le planning actuel (data.json) sera importé.</p>
+        <label>Code d'installation<input name="code" type="password" autocomplete="off" required><small>Le secret SETUP_CODE mis dans GitHub.</small></label>
         <label>Ton prénom<input type="text" name="name" autocomplete="given-name" required></label>
         <label>Identifiant<input type="text" name="login" autocomplete="username" autocapitalize="none" required></label>
-        <label>Mot de passe<input name="password" type="password" autocomplete="new-password" minlength="8" required><small>8 caractères minimum.</small></label>
-        <button class="btn primary" type="submit">Créer mon compte</button>`,
-      register: `<h1>Invitation</h1><p class="muted">${esc(info && info.from ? info.from : "On")} t'invite à partager le planning de garde des enfants.</p>
-        <label>Ton prénom<input type="text" name="name" autocomplete="given-name" required></label>
-        <span class="lbl">Tu es</span>${parentPick(info && info.parent ? info.parent : "b")}
-        <label>Identifiant<input type="text" name="login" autocomplete="username" autocapitalize="none" required></label>
-        <label>Mot de passe<input name="password" type="password" autocomplete="new-password" minlength="8" required><small>8 caractères minimum.</small></label>
+        ${pwd()}
         <button class="btn primary" type="submit">Créer mon compte</button>`,
     };
-    box.innerHTML = `<form class="card auth-card" data-view="${view}" novalidate>
+    const pitch = !logged && (view === "login" || view === "signup") && !inv ? `<div class="pitch">
+        <h2>Le planning de garde alternée, enfin simple.</h2>
+        <p class="muted">Un calendrier partagé entre les deux parents, toujours à jour.</p>
+        <ul><li><strong>Le rythme en deux clics</strong> : une semaine sur deux, 2-2-3, un week-end sur deux…</li>
+        <li><strong>Les exceptions</strong> : vacances, échanges, jours fériés, vacances scolaires.</li>
+        <li><strong>« Le 17 juin, suis-je dispo ? »</strong> : la réponse tout de suite.</li>
+        <li><strong>Des rappels par e-mail</strong> la veille d'un changement de garde et avant les événements.</li></ul></div>` : "";
+    box.innerHTML = `<div class="auth-in">${pitch}<form class="card auth-card" data-view="${view}" novalidate>
         <span class="brand-mark big" aria-hidden="true"><i></i><i></i></span>
         ${forms[view]}
         <p class="auth-err err" role="alert"></p>
-      </form>`;
+      </form></div>${legalLinks}`;
     const form = box.querySelector("form");
-    form.addEventListener("click", (e) => {
+    const err = (m) => { form.querySelector(".auth-err").textContent = m; };
+    form.addEventListener("click", async (e) => {
       const b = e.target.closest(".who-pick button");
-      if (!b) return;
-      $$(".who-pick button", form).forEach((x) => x.classList.toggle("on", x === b));
+      if (b) $$("button", b.parentNode).forEach((x) => x.classList.toggle("on", x === b));
+      const go = e.target.closest("[data-go]");
+      if (!go) return;
+      if (go.dataset.go === "skip") { clearUrl(); return startApi(); }
+      if (go.dataset.go === "logout") {
+        await S.Api.post("logout").catch(() => {});
+        S.status = { ...S.status, user: null, plannings: [], planning: null };
+        return showAuth("login");
+      }
+      showAuth(go.dataset.go);
     });
-    form.querySelector("input").focus();
+    if (view === "create") {
+      const upd = () => {
+        const nA = form.na.value.trim() || "Parent 1", nB = form.nb.value.trim() || "Parent 2";
+        $$('.who-pick [data-w="a"]', form).forEach((x) => (x.textContent = nA));
+        $$('.who-pick [data-w="b"]', form).forEach((x) => (x.textContent = nB));
+        const pr = form.preset.value;
+        $("#cr-who-lbl").textContent = pr === "we2" ? `Le week-end du ${P.shortDate(P.addDays(mon, 5))}, les enfants sont chez`
+          : pr === "none" ? "Les enfants vivent chez" : `Cette semaine (du ${P.shortDate(mon)}), les enfants sont chez`;
+      };
+      form.addEventListener("input", upd);
+      upd();
+    }
+    const first = form.querySelector("input:not([type=checkbox])");
+    if (first) first.focus();
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
+      err("");
       const f = Object.fromEntries(new FormData(form));
-      const picked = form.querySelector(".who-pick button.on");
-      if (picked) f.parent = picked.dataset.w;
+      const pick = (sel = ".who-pick") => { const b = form.querySelector(`${sel} button.on`); return b ? b.dataset.w || null : null; };
       const btn = form.querySelector("button[type=submit]");
+      if (!btn) return;
       btn.disabled = true;
       try {
-        if (view === "login") await S.Api.post("login", { login: f.login, password: f.password });
-        else if (view === "setup") await S.Api.post("setup", f);
-        else await S.Api.post("register", { ...f, token });
-        if (token) history.replaceState(null, "", location.pathname);
-        if (f.parent && view !== "login") { st.me = f.parent; LS.set("alterplan.me", st.me); }
-        await S.detect();
-        if (!S.status || !S.status.user) throw new Error("Connexion impossible.");
+        if (view === "login") {
+          await S.Api.post("login", { login: f.login, password: f.password });
+        } else if (view === "setup") {
+          await S.Api.post("setup", f);
+        } else if (view === "signup") {
+          if (!form.terms.checked) throw new Error("Coche la case pour accepter les conditions d'utilisation.");
+          const j = await S.Api.post("signup", { name: f.name, email: f.email, password: f.password, terms: true, token: inv || undefined, parent: info ? pick() : undefined });
+          clearUrl();
+          if (j.verify) { st.sentTo = j.email; return showAuth("sent"); }
+        } else if (view === "forgot") {
+          await S.Api.post("forgot", { email: f.email });
+          form.innerHTML = `<span class="brand-mark big" aria-hidden="true"><i></i><i></i></span><h1>E-mail envoyé</h1>
+            <p>Si un compte existe pour <strong>${esc(f.email)}</strong>, un lien vient de partir. Il est valable 2 heures.</p>
+            <button class="btn" type="button" data-go="login">Retour à la connexion</button>`;
+          return;
+        } else if (view === "reset") {
+          await S.Api.post("reset", { token: urlToken("reinitialiser"), password: f.password });
+          clearUrl();
+          toast("Mot de passe changé.");
+        } else if (view === "join") {
+          const j = await S.Api.post("join", { token: inv, parent: pick() });
+          clearUrl();
+          S.setPlanning(j.id);
+          toast(j.already ? "Tu fais déjà partie de ce planning." : "Bienvenue dans le planning !");
+        } else if (view === "create") {
+          const me = pick('[data-pick="me"]'), who = pick('[data-pick="who"]') || "a";
+          const preset = f.preset;
+          const data = {
+            version: 1,
+            parents: { a: { name: f.na.trim() || "Papa", color: P.DEFAULT.parents.a.color }, b: { name: f.nb.trim() || "Maman", color: P.DEFAULT.parents.b.color } },
+            rhythm: { preset, first: preset === "none" ? P.other(who) : who, ref: mon },
+            overrides: {}, events: [],
+          };
+          const j = await S.Api.post("create", { name: f.pname.trim(), parent: me, data });
+          S.setPlanning(j.id);
+          toast("Planning créé. Invite l'autre parent depuis les réglages.");
+        }
+        await S.refresh();
+        if (!S.status.user) throw new Error("Connexion impossible.");
         startApi();
-        if (view !== "login") toast(view === "setup" ? "Compte créé, planning importé." : "Bienvenue !");
-      } catch (err) {
-        form.querySelector(".auth-err").textContent = err.message;
+      } catch (ex) {
+        if (ex.code === "unverified") { err(ex.message); btn.disabled = false; return; }
+        err(ex.message);
         btn.disabled = false;
       }
     });
   }
 
-  /* Réglages › Compte (mode comptes) */
+  /* Réglages › Planning et Compte (mode comptes) */
   async function renderAccount() {
     const sec = $("#sec-account");
     const api = S.backend === "api" && S.status && S.status.user;
     sec.hidden = !api;
     $("#sec-share").hidden = !!api;
     if (!api) return;
-    const u = S.status.user;
-    sec.innerHTML = `<h3>Compte</h3>
-      <div class="acc-me"><p>Connecté : <strong>${esc(u.name)}</strong> <span class="muted">(${esc(u.login)})</span></p>
-        <button type="button" class="btn small" id="acc-logout">Se déconnecter</button></div>
-      <div class="acc-role"><span class="small muted">Je suis</span>
+    const u = S.status.user, pl = S.status.planning;
+    sec.innerHTML = `<h3>Planning « ${esc(pl.name)} »</h3>
+      ${u.admin ? `<form class="token-row" id="pl-name"><input type="text" name="name" value="${esc(pl.name)}" maxlength="80" aria-label="Nom du planning" required><button class="btn small">Renommer</button></form>` : ""}
+      <div class="acc-role"><span class="small muted">Dans ce planning, je suis</span>
         <div class="seg" id="acc-parent" role="radiogroup" aria-label="Mon rôle">
-          ${[["a", name("a")], ["b", name("b")], ["", u.admin ? "Admin seulement" : "Aucun"]].map(([v, l]) => `<button type="button" role="radio" data-p="${v}" class="${(u.parent || "") === v ? "active" : ""}" aria-checked="${(u.parent || "") === v}">${esc(l)}</button>`).join("")}
+          ${[["a", name("a")], ["b", name("b")], ["", "Ni l'un ni l'autre"]].map(([v, l]) => `<button type="button" role="radio" data-p="${v}" class="${(u.parent || "") === v ? "active" : ""}" aria-checked="${(u.parent || "") === v}">${esc(l)}</button>`).join("")}
         </div></div>
-      <div class="acc-users" id="acc-users"><p class="muted small">Chargement des comptes…</p></div>
+      <div class="acc-users" id="acc-users"><p class="muted small">Chargement des membres…</p></div>
       ${u.admin ? `<div class="acc-invite">
-        <p class="small">Inviter un parent : un lien à usage unique, valable 14 jours, à lui envoyer.</p>
-        <div class="row-btns"><button type="button" class="btn small" data-inv="b">Inviter ${esc(name("b"))}</button><button type="button" class="btn small" data-inv="a">Inviter ${esc(name("a"))}</button></div>
+        <p class="small">Inviter quelqu'un : un lien à usage unique, valable 14 jours, à lui envoyer.</p>
+        <div class="row-btns"><button type="button" class="btn small" data-inv="b">Inviter ${esc(name("b"))}</button><button type="button" class="btn small" data-inv="a">Inviter ${esc(name("a"))}</button><button type="button" class="btn small" data-inv="">Inviter un proche</button></div>
+        <label class="check small"><input type="checkbox" id="inv-admin"> Comme administrateur (peut inviter et gérer les membres)</label>
         <div class="inv-out" id="inv-out" hidden><input readonly id="inv-link" aria-label="Lien d'invitation"><button type="button" class="btn small primary" id="inv-copy">Copier</button></div>
       </div>` : ""}
+      <details class="acc-hist" id="acc-hist"><summary>Dernières modifications</summary><ul id="hist-list"></ul></details>
+      <details class="acc-danger"><summary>Quitter ou supprimer ce planning</summary>
+        <div class="danger-in">
+          <p class="small muted">Quitter : tu n'y as plus accès, les autres membres le gardent.${S.status.plannings.length === 1 ? " Seul membre : le planning est supprimé." : ""}</p>
+          <button type="button" class="btn small" id="pl-leave">Quitter ce planning</button>
+          ${u.admin ? `<form id="pl-del" class="token-row"><input type="text" name="confirm" placeholder="Recopie « ${esc(pl.name)} »" aria-label="Nom du planning pour confirmer" required><button class="btn small danger">Supprimer pour tous</button></form>
+          <p class="small muted">La suppression efface le planning, son historique et les invitations, pour tous les membres.</p>` : ""}
+        </div></details>
+
+      <h3 class="acc-h2">Mon compte</h3>
+      <div class="acc-me"><p><strong>${esc(u.name)}</strong> <span class="muted">${esc(u.email || u.login)}</span></p>
+        <button type="button" class="btn small" id="acc-logout">Se déconnecter</button></div>
+      <form class="token-row" id="acc-name"><input type="text" name="name" value="${esc(u.name)}" maxlength="64" aria-label="Prénom" required><button class="btn small">Changer de prénom</button></form>
       <details class="acc-notif" id="acc-notif"><summary>Notifications par e-mail</summary>
         <form id="notif-form" class="notif-form">
-          <label class="full">Adresse e-mail<input type="email" name="email" placeholder="prenom@exemple.fr" autocomplete="email"></label>
+          <label class="full">Adresse e-mail<input type="email" name="email" placeholder="prenom@exemple.fr" autocomplete="email"><small>Une nouvelle adresse est confirmée par un lien avant d'être utilisée.</small></label>
           <fieldset><legend>Rappels d'événements</legend>
             <label class="check"><input type="checkbox" name="b0"> Le jour même</label>
             <label class="check"><input type="checkbox" name="b1"> La veille</label>
@@ -1013,7 +1183,7 @@
             <label class="check"><input type="checkbox" name="weekly"> Résumé de la semaine, le lundi matin</label>
             <label class="check"><input type="checkbox" name="changes"> Modifications faites par les autres</label>
           </fieldset>
-          <p class="muted small">Les rappels partent chaque matin vers 7 h, les modifications dans l'heure.</p>
+          <p class="muted small">Pour tous tes plannings. Les rappels partent chaque matin vers 7 h, les modifications dans l'heure.</p>
           <div class="row-btns"><button class="btn small primary">Enregistrer</button><button type="button" class="btn small" id="notif-test">Envoyer un e-mail de test</button></div>
         </form></details>
       <details class="acc-pass"><summary>Changer de mot de passe</summary>
@@ -1022,39 +1192,81 @@
           <input type="password" name="new" placeholder="Nouveau (8 car. min.)" autocomplete="new-password" minlength="8" required>
           <button class="btn small primary">Changer</button>
         </form></details>
-      <details class="acc-hist" id="acc-hist"><summary>Dernières modifications</summary><ul id="hist-list"></ul></details>`;
+      <details class="acc-danger"><summary>Mes données</summary>
+        <div class="danger-in">
+          <p class="small muted">Télécharge toutes les données de ton compte et de tes plannings (fichier JSON).</p>
+          <a class="btn small" href="api/index.php?a=export" download="alterplan-mes-donnees.json">Exporter mes données</a>
+          <p class="small muted">Supprimer ton compte efface tes informations. Les plannings dont tu es le seul membre sont supprimés ; les autres restent à leurs membres (tes modifications y apparaissent sans ton nom).</p>
+          <form id="acc-del" class="token-row"><input type="password" name="password" placeholder="Ton mot de passe" autocomplete="current-password" required><button class="btn small danger">Supprimer mon compte</button></form>
+        </div></details>
+      ${legalLinks}`;
+    const reload = async () => { await S.refresh(); renderPlanBtn(); renderAccount(); };
+    const out = async () => { S.setPlanning(0); await S.refresh(); dlgSet.close(); startApi(); };
     $("#acc-parent").onclick = async (e) => {
       const b = e.target.closest("button[data-p]");
       if (!b) return;
       try {
         await S.Api.post("profile", { name: u.name, parent: b.dataset.p || null });
-        S.status.user = { ...u, parent: b.dataset.p || null };
         st.me = b.dataset.p || "none";
         LS.set("alterplan.me", st.me);
+        await reload();
         render();
-        renderAccount();
+      } catch (err) { toast(err.message); }
+    };
+    const plName = $("#pl-name");
+    if (plName) plName.onsubmit = async (e) => {
+      e.preventDefault();
+      try { await S.Api.post("settings", { name: plName.name.value }); await reload(); toast("Planning renommé."); } catch (err) { toast(err.message); }
+    };
+    $("#acc-name").onsubmit = async (e) => {
+      e.preventDefault();
+      try { await S.Api.post("profile", { name: e.target.name.value }); await reload(); toast("Prénom changé."); } catch (err) { toast(err.message); }
+    };
+    $("#pl-leave").onclick = async (e) => {
+      const b = e.currentTarget;
+      if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Confirmer : quitter"; return; }
+      try { const j = await S.Api.post("leave"); toast(j.deleted ? "Planning supprimé." : "Tu as quitté le planning."); await out(); } catch (err) { toast(err.message); }
+    };
+    const plDel = $("#pl-del");
+    if (plDel) plDel.onsubmit = async (e) => {
+      e.preventDefault();
+      try { await S.Api.post("delplanning", { confirm: plDel.confirm.value.trim() }); toast("Planning supprimé."); await out(); } catch (err) { toast(err.message); }
+    };
+    $("#acc-del").onsubmit = async (e) => {
+      e.preventDefault();
+      const b = e.target.querySelector("button");
+      if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Confirmer : supprimer définitivement"; return; }
+      try {
+        await S.Api.post("delaccount", { password: e.target.password.value });
+        S.status = { ...S.status, user: null, plannings: [], planning: null };
+        S.setPlanning(0);
+        LS.set("alterplan.cache", null);
+        dlgSet.close();
+        showAuth("login");
+        toast("Ton compte a été supprimé.");
       } catch (err) { toast(err.message); }
     };
     $("#acc-logout").onclick = async () => {
       await S.Api.post("logout").catch(() => {});
-      S.status = { ...S.status, user: null };
+      S.status = { ...S.status, user: null, plannings: [], planning: null };
       LS.set("alterplan.cache", null);
       dlgSet.close();
       showAuth("login");
     };
     $$("[data-inv]", sec).forEach((b) => (b.onclick = async () => {
       try {
-        const j = await S.Api.post("invite", { parent: b.dataset.inv });
+        const j = await S.Api.post("invite", { parent: b.dataset.inv || null, role: $("#inv-admin").checked ? "admin" : "member" });
         const url = `${location.origin}${location.pathname}?invitation=${j.token}`;
         $("#inv-out").hidden = false;
         $("#inv-link").value = url;
         $("#inv-link").select();
+        listMembers();
       } catch (e) { toast(e.message); }
     }));
     const copy = $("#inv-copy");
     if (copy) copy.onclick = async () => {
       const url = $("#inv-link").value;
-      if (navigator.share) { try { await navigator.share({ title: "alterplan", text: "Invitation au planning de garde", url }); return; } catch (e) { /* annulé */ } }
+      if (navigator.share) { try { await navigator.share({ title: "alterplan", text: `Invitation au planning « ${pl.name} »`, url }); return; } catch (e) { /* annulé */ } }
       try { await navigator.clipboard.writeText(url); toast("Lien copié."); } catch (e) { $("#inv-link").select(); }
     };
     const nf = $("#notif-form");
@@ -1062,7 +1274,6 @@
       nf.email.value = j.email || "";
       for (const n of [0, 1, 7]) nf[`b${n}`].checked = j.prefs.before.includes(n);
       for (const k of ["switch", "weekly", "changes"]) nf[k].checked = !!j.prefs[k];
-      if (!j.email) $("#acc-notif").open = true;
     }).catch(() => {});
     const savePrefs = () => S.Api.post("prefs", {
       email: nf.email.value.trim(),
@@ -1070,12 +1281,18 @@
     });
     nf.onsubmit = async (e) => {
       e.preventDefault();
-      try { const j = await savePrefs(); toast(j.email ? "Notifications enregistrées." : "Notifications désactivées (pas d'adresse)."); }
-      catch (err) { toast(err.message); }
+      try {
+        const j = await savePrefs();
+        toast(j.pending ? `Lien de confirmation envoyé à ${j.pending}. L'adresse changera après le clic.` : j.email ? "Notifications enregistrées." : "Notifications désactivées (pas d'adresse).");
+      } catch (err) { toast(err.message); }
     };
     $("#notif-test").onclick = async () => {
-      try { await savePrefs(); await S.Api.post("testmail"); toast(`E-mail de test envoyé à ${nf.email.value.trim()}.`); }
-      catch (err) { toast(err.message); }
+      try {
+        const j = await savePrefs();
+        if (j.pending) return toast(`Confirme d'abord ${j.pending} avec le lien reçu.`);
+        await S.Api.post("testmail");
+        toast(`E-mail de test envoyé à ${j.email}.`);
+      } catch (err) { toast(err.message); }
     };
     $("#acc-pass").onsubmit = async (e) => {
       e.preventDefault();
@@ -1090,7 +1307,15 @@
         const d = new Date(h.at.replace(" ", "T") + "Z");
         return `<li><span class="muted">${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span> <strong>${esc(h.name || "?")}</strong> · ${esc(h.message)}</li>`;
       }).join("") || `<li class="muted">Rien pour l'instant.</li>`;
-    }, { once: false });
+    });
+    listMembers();
+  }
+
+  /* Membres du planning : rôle, et pour les admins inscription, dernière visite, modifications, invitations. */
+  async function listMembers() {
+    const sec = $("#sec-account"), box = $("#acc-users");
+    if (!box) return;
+    const u = S.status.user;
     try {
       const j = await S.Api.get("users");
       const tm = (t) => new Date(t.replace(" ", "T") + "Z");
@@ -1106,23 +1331,26 @@
       };
       const role = (x) => x.parent ? pill(x.parent, x.name) : `<span class="who"><i></i>${esc(x.name)}</span>`;
       const members = j.users.map((x) => `<li>
-        <div class="m-head">${role(x)} <span class="muted small">${esc(x.login)}${x.admin ? " · admin" : ""}${!x.parent && !x.admin ? " · sans rôle" : ""}</span>
-        ${u.admin && x.id !== u.id ? `<button type="button" class="link-btn small" data-del="${x.id}">Retirer</button>` : ""}</div>
-        ${u.admin ? `<div class="m-meta muted small">${x.email ? esc(x.email) : "pas d'e-mail"} · inscrit le ${day(x.created)} · vu ${ago(x.lastSeen)} · ${x.edits ? `${x.edits} modification${x.edits > 1 ? "s" : ""}, dernière ${ago(x.lastEdit)}` : "aucune modification"}</div>` : ""}
+        <div class="m-head">${role(x)} <span class="muted small">${x.admin ? "admin" : "membre"}${x.parent ? "" : " · ni l'un ni l'autre"}${x.id === u.id ? " · toi" : ""}</span>
+        ${u.admin && x.id !== u.id ? `<span class="m-act"><button type="button" class="link-btn small" data-role="${x.id}" data-to="${x.admin ? "member" : "admin"}">${x.admin ? "Retirer admin" : "Rendre admin"}</button><button type="button" class="link-btn small" data-del="${x.id}">Retirer</button></span>` : ""}</div>
+        ${u.admin ? `<div class="m-meta muted small">${x.email ? esc(x.email) : esc(x.login)} · membre depuis le ${day(x.created)} · vu ${ago(x.lastSeen)} · ${x.edits ? `${x.edits} modification${x.edits > 1 ? "s" : ""}, dernière ${ago(x.lastEdit)}` : "aucune modification"}</div>` : ""}
       </li>`).join("");
-      const inv = (j.invites || []).map((i) => `<li><div class="m-head"><span class="muted small">Invitation ${i.parent ? `côté ${esc(st.data.parents[i.parent].name)}` : "sans rôle"} · expire le ${day(i.expires)}</span>
+      const inv = (j.invites || []).map((i) => `<li><div class="m-head"><span class="muted small">Invitation ${i.parent ? `côté ${esc(name(i.parent))}` : "d'un proche"}${i.role === "admin" ? " (admin)" : ""} · expire le ${day(i.expires)}</span>
         <button type="button" class="link-btn small" data-revoke="${i.id}">Annuler</button></div></li>`).join("");
-      $("#acc-users").innerHTML = `<p class="small muted">Membres du planning (${j.users.length})</p><ul class="members">${members}</ul>
+      box.innerHTML = `<p class="small muted">Membres (${j.users.length})</p><ul class="members">${members}</ul>
         ${inv ? `<p class="small muted">Invitations en attente</p><ul class="members">${inv}</ul>` : ""}`;
       $$("[data-revoke]", sec).forEach((b) => (b.onclick = async () => {
-        try { await S.Api.post("revoke", { id: b.dataset.revoke }); renderAccount(); } catch (e) { toast(e.message); }
+        try { await S.Api.post("revoke", { id: b.dataset.revoke }); listMembers(); } catch (e) { toast(e.message); }
+      }));
+      $$("[data-role]", sec).forEach((b) => (b.onclick = async () => {
+        try { await S.Api.post("member", { id: Number(b.dataset.role), role: b.dataset.to }); listMembers(); } catch (e) { toast(e.message); }
       }));
       $$("[data-del]", sec).forEach((b) => (b.onclick = async () => {
         if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Confirmer le retrait"; return; }
-        try { await S.Api.post("deluser", { id: Number(b.dataset.del) }); renderAccount(); } catch (e) { toast(e.message); }
+        try { await S.Api.post("member", { id: Number(b.dataset.del), remove: true }); listMembers(); } catch (e) { toast(e.message); }
       }));
     } catch (e) {
-      $("#acc-users").innerHTML = "";
+      box.innerHTML = "";
     }
   }
 

@@ -21,18 +21,23 @@ function ap_prefs($raw): array
 function ap_h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
 /* Gabarit commun des e-mails. $blocks : [[titre, [lignes html]]] */
-function ap_mailHtml(array $cfg, string $title, array $blocks): string
+function ap_mailHtml(array $cfg, string $title, array $blocks, ?array $cta = null): string
 {
-    $url = ap_h($cfg['site_url'] ?? 'https://alterplan.quiquandou.fr');
+    $url = ap_h($cta[1] ?? ($cfg['site_url'] ?? 'https://alterplan.quiquandou.fr'));
+    $label = ap_h($cta[0] ?? 'Ouvrir le planning');
     $html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;padding:20px;color:#16181a">'
         . '<p style="margin:0 0 4px;font-size:13px;color:#6b7075;letter-spacing:.5px;text-transform:uppercase">alterplan</p>'
         . '<h1 style="margin:0 0 16px;font-size:22px">' . ap_h($title) . '</h1>';
     foreach ($blocks as [$h, $lines]) {
+        if ($h === '') { // simple paragraphe
+            foreach ($lines as $l) $html .= '<p style="margin:0 0 10px;line-height:1.5">' . $l . '</p>';
+            continue;
+        }
         $html .= '<h2 style="margin:18px 0 8px;font-size:15px;color:#3f4448">' . ap_h($h) . '</h2><ul style="margin:0;padding-left:18px;line-height:1.6">';
         foreach ($lines as $l) $html .= "<li>$l</li>";
         $html .= '</ul>';
     }
-    return $html . '<p style="margin:24px 0 0"><a href="' . $url . '" style="display:inline-block;background:#16181a;color:#fff;text-decoration:none;padding:10px 16px;border-radius:10px">Ouvrir le planning</a></p>'
+    return $html . '<p style="margin:24px 0 0"><a href="' . $url . '" style="display:inline-block;background:#16181a;color:#fff;text-decoration:none;padding:10px 16px;border-radius:10px">' . $label . '</a></p>'
         . '<p style="margin:20px 0 0;font-size:12px;color:#6b7075">Pour changer ces e-mails : Réglages › Compte › Notifications.</p></div>';
 }
 
@@ -101,36 +106,45 @@ function ap_daily(array $p, array $user, array $prefs, string $today): ?array
     return $blocks ? [$subject, $blocks] : null;
 }
 
-/* Tâche planifiée : à lancer toutes les heures (ou une fois par jour, après 7 h). */
+/* Tâche planifiée : à lancer toutes les heures (ou une fois par jour, après 7 h).
+ * Pour chaque membre de chaque planning qui a une adresse confirmée. */
 function ap_runNotifications(PDO $db, array $cfg, string $today, int $hour, bool $force = false): array
 {
     $stats = ['daily' => 0, 'changes' => 0];
-    $row = $db->query('SELECT data, version FROM ap_planning WHERE id = 1')->fetch();
-    if (!$row) return $stats;
-    $p = ap_norm(json_decode($row['data'], true));
-    $current = (int)$row['version'];
-    $users = $db->query("SELECT id, name, parent, email, prefs, notified_version FROM ap_users WHERE email IS NOT NULL AND email <> ''")->fetchAll();
-    $title = fn(string $s): string => 'alterplan · ' . $s;
-    foreach ($users as $u) {
+    $plans = [];
+    foreach ($db->query('SELECT id, name, data, version FROM ap_planning')->fetchAll() as $r) {
+        $plans[(int)$r['id']] = ['name' => (string)$r['name'], 'p' => ap_norm(json_decode($r['data'], true)), 'version' => (int)$r['version']];
+    }
+    $rows = $db->query("SELECT m.planning_id, m.parent, m.notified_version, u.id, u.name, u.email, u.prefs FROM ap_members m JOIN ap_users u ON u.id = m.user_id WHERE u.email IS NOT NULL AND u.email <> '' AND u.verified = 1 ORDER BY u.id, m.joined")->fetchAll();
+    $count = array_count_values(array_map(fn($r) => (int)$r['id'], $rows));
+    foreach ($rows as $u) {
+        $pl = $plans[(int)$u['planning_id']] ?? null;
+        if (!$pl) continue;
+        $p = $pl['p'];
+        $current = $pl['version'];
         $prefs = ap_prefs($u['prefs']);
+        // Plusieurs plannings : le nom du planning précède le sujet.
+        $title = fn(string $s): string => 'alterplan · ' . ($count[(int)$u['id']] > 1 ? $pl['name'] . ' · ' : '') . $s;
         // Modifications faites par les autres depuis le dernier passage.
         $seen = $u['notified_version'] === null ? $current : (int)$u['notified_version'];
         if ($prefs['changes'] && $current > $seen) {
-            $st = $db->prepare('SELECT h.at, h.message, u.name FROM ap_history h LEFT JOIN ap_users u ON u.id = h.user_id WHERE h.version > ? AND (h.user_id IS NULL OR h.user_id <> ?) ORDER BY h.id LIMIT 30');
-            $st->execute([$seen, $u['id']]);
-            $rows = $st->fetchAll();
-            if ($rows) {
-                $who = implode(', ', array_unique(array_map(fn($r) => $r['name'] ?: '?', $rows)));
-                $lines = array_map(fn($r) => '<strong>' . ap_h($r['name'] ?: '?') . '</strong> : ' . ap_h($r['message']), $rows);
+            $st = $db->prepare('SELECT h.at, h.message, u.name FROM ap_history h LEFT JOIN ap_users u ON u.id = h.user_id WHERE h.planning_id = ? AND h.version > ? AND (h.user_id IS NULL OR h.user_id <> ?) ORDER BY h.id LIMIT 30');
+            $st->execute([$u['planning_id'], $seen, $u['id']]);
+            $hist = $st->fetchAll();
+            if ($hist) {
+                $who = implode(', ', array_unique(array_map(fn($r) => $r['name'] ?: '?', $hist)));
+                $lines = array_map(fn($r) => '<strong>' . ap_h($r['name'] ?: '?') . '</strong> : ' . ap_h($r['message']), $hist);
                 ap_sendMail($cfg, $u['email'], $title("Planning modifié par $who"), ap_mailHtml($cfg, "Planning modifié par $who", [['Modifications', $lines]]));
                 $stats['changes']++;
             }
         }
-        if ($current !== $seen || $u['notified_version'] === null) $db->prepare('UPDATE ap_users SET notified_version = ? WHERE id = ?')->execute([$current, $u['id']]);
+        if ($current !== $seen || $u['notified_version'] === null) {
+            $db->prepare('UPDATE ap_members SET notified_version = ? WHERE planning_id = ? AND user_id = ?')->execute([$current, $u['planning_id'], $u['id']]);
+        }
 
         // Rappels du jour, une fois par jour à partir de 7 h.
         if ($hour < 7 && !$force) continue;
-        $key = "daily:{$u['id']}:$today";
+        $key = "daily:{$u['id']}:{$u['planning_id']}:$today";
         $st = $db->prepare('SELECT COUNT(*) FROM ap_sent WHERE k = ?');
         $st->execute([$key]);
         if ((int)$st->fetchColumn()) continue;

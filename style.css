@@ -440,7 +440,7 @@ body.locked #me-btn, body.locked #settings-btn { display: none; }
 .acc-role { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .inv-out { display: flex; gap: 6px; }
 .inv-out input { flex: 1; font-size: .8rem; }
-.acc-pass summary, .acc-hist summary { cursor: pointer; font-weight: 600; font-size: .88rem; }
+.acc-pass summary, .acc-hist summary, .acc-danger summary { cursor: pointer; font-weight: 600; font-size: .88rem; }
 .acc-pass form { margin-top: 8px; }
 .acc-hist ul { margin-top: 8px; font-size: .84rem; max-height: 260px; overflow: auto; }
 
@@ -448,3 +448,51 @@ body.locked #me-btn, body.locked #settings-btn { display: none; }
 .foot p { margin: 0; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ===== Plateforme : plannings, inscription, pages légales ===== */
+.top-in > .brand { flex: none; }
+.plan-sw { position: relative; min-width: 0; margin-right: auto; }
+.plan-btn { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-height: 34px; padding: 0 8px 0 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-weight: 600; font-size: .86rem; color: var(--text-2); }
+.plan-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
+.plan-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; flex: none; }
+.plan-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; min-width: 240px; max-width: min(320px, calc(100vw - 32px)); padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); display: grid; gap: 2px; }
+.plan-menu .pm-h { margin: 4px 10px 4px; font-size: .72rem; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.plan-menu button { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 0; background: none; padding: 9px 10px; border-radius: 10px; text-align: left; font-size: .92rem; font-weight: 600; color: var(--text); }
+.plan-menu button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-menu button small { font-weight: 500; color: var(--muted); font-size: .76rem; }
+.plan-menu button:hover, .plan-menu button.on { background: var(--surface-3); }
+.plan-menu .pm-new { color: var(--text-2); border-top: 1px solid var(--border); border-radius: 0 0 10px 10px; margin-top: 4px; }
+@media (max-width: 520px) { .top-in:has(.plan-btn:not([hidden])) .brand-name { display: none; } .plan-btn span { max-width: 14ch; } }
+
+.auth { align-content: center; gap: 20px; }
+.auth-in { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 40px; width: 100%; }
+.pitch { width: min(440px, 100%); }
+.pitch h2 { font-family: var(--font-display); font-size: clamp(1.9rem, 4vw, 2.6rem); line-height: 1.1; margin: 0 0 10px; }
+.pitch ul { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 12px; }
+.pitch li { position: relative; padding-left: 22px; color: var(--text-2); line-height: 1.45; }
+.pitch li::before { content: ""; position: absolute; left: 0; top: .45em; width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(90deg, var(--pa) 50%, var(--pb) 50%); }
+.pitch strong { color: var(--text); }
+.auth-card select { min-height: 44px; font-size: .95rem; }
+.auth-card .check.terms { display: flex; flex-direction: row; align-items: flex-start; gap: 8px; font-weight: 500; line-height: 1.4; }
+.auth-card .check.terms input { min-height: 0; margin-top: 2px; }
+.auth-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: .88rem; color: var(--muted); }
+.legal-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; font-size: .8rem; margin: 8px 0 0; }
+.legal-links a { color: var(--muted); }
+.acc-h2 { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.acc-danger .danger-in { display: grid; gap: 8px; justify-items: start; padding-top: 8px; }
+.acc-danger .danger-in p { margin: 0; }
+.btn.danger { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--border)); }
+.members .m-act { margin-left: auto; display: inline-flex; gap: 12px; }
+.acc-invite .check { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+
+/* Pages légales */
+.legal { max-width: 760px; padding-top: 28px; padding-bottom: 56px; }
+.legal h1 { font-family: var(--font-display); font-size: 2.2rem; margin: 0 0 6px; }
+.legal h2 { font-size: 1.15rem; margin: 28px 0 8px; }
+.legal p, .legal li { line-height: 1.6; color: var(--text-2); }
+.legal p { margin: 0 0 12px; }
+.legal h1 + p { margin-bottom: 8px; }
+.legal .back { display: inline-block; margin-bottom: 18px; }
+.legal table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+.legal th, .legal td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+@media (max-width: 520px) { body:not(.locked) #theme-btn, body:not(.locked) .sync { display: none; } .top-actions { gap: 6px; } }

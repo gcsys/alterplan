@@ -38,7 +38,8 @@
 
   /* ===== API PHP (même domaine) ===== */
   async function call(a, body, query = "") {
-    const r = await fetch(`api/index.php?a=${a}${query}`, body === undefined
+    const pid = S.pid ? `&p=${S.pid}` : "";
+    const r = await fetch(`api/index.php?a=${a}${pid}${query}`, body === undefined
       ? { credentials: "same-origin", cache: "no-store" }
       : { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json", "X-Alterplan": "1" }, body: JSON.stringify(body) });
     let j = null;
@@ -57,6 +58,16 @@
   const S = {
     backend: "github", // devient "api" si l'API PHP répond
     status: null,
+    pid: Number(LS.get("alterplan.pid")) || 0, // planning affiché (mode comptes)
+    setPlanning(id) { S.pid = Number(id) || 0; LS.set("alterplan.pid", S.pid ? String(S.pid) : null); },
+    /* Statut de l'API : compte, plannings, planning courant. */
+    async refresh() {
+      const j = await call("status");
+      S.status = j;
+      S.setPlanning(j.planning ? j.planning.id : 0);
+      S.version = j.version || 0;
+      return j;
+    },
     version: 0,
     Api,
     /* Choisit le mode. -> statut de l'API ou null (mode github). */
@@ -68,7 +79,7 @@
         if (j.error || !("needsSetup" in j)) return null; // API absente ou base pas encore configurée
         S.backend = "api";
         S.status = j;
-        if (j.user) S.version = j.version || 0;
+        if (j.user) { S.version = j.version || 0; S.setPlanning(j.planning ? j.planning.id : 0); }
         return j;
       } catch (e) {
         return null;
@@ -96,10 +107,8 @@
     async load() {
       if (S.backend === "api") {
         try {
-          const j = await call("status");
-          S.status = j;
+          const j = await S.refresh();
           if (!j.user) return { data: null, source: "auth" };
-          S.version = j.version || 0;
           if (j.data) S.cache(j.data);
           return { data: j.data, source: "api" };
         } catch (e) {

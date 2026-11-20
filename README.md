@@ -27,17 +27,26 @@ Site statique, en ligne sur https://alterplan.quiquandou.fr (hébergement quiqua
   publie l'année suivante. Les jours fériés sont calculés automatiquement.
 - **Export** JSON, import, et fichier `.ics` à ajouter à un agenda (Google, Apple, Outlook).
 
-## Comptes et base de données (alterplan.quiquandou.fr)
+## Comptes, plannings et base de données (alterplan.quiquandou.fr)
 
-Sur l'hébergement OVH, le planning est dans une base MySQL, derrière une petite API PHP (`api/index.php`).
-Chaque parent a son compte ; le planning est privé (connexion obligatoire).
+Sur l'hébergement OVH, les plannings sont dans une base MySQL, derrière une petite API PHP (`api/index.php`).
+Le site est public : chacun peut créer un compte et ses propres plannings, qui restent privés (connexion obligatoire).
 
-- Premier passage : écran « Bienvenue » ; le code d'installation est le secret `SETUP_CODE`. Le planning
-  de `data.json` est importé dans la base à ce moment-là.
-- Réglages › Compte : inviter l'autre parent (lien à usage unique, 14 jours), changer de mot de passe,
-  dernières modifications (historique des 300 dernières versions dans la base), déconnexion.
-- Enregistrement avec numéro de version : si les deux parents modifient en même temps, les changements
-  sont fusionnés.
+- **Inscription libre** avec confirmation de l'adresse par e-mail (lien valable 3 jours), « mot de passe oublié »
+  (lien valable 2 heures). Connexion par e-mail ou identifiant. Options de `api/config.php` :
+  `'signup' => false` pour n'accepter que les personnes invitées, `'verify_email' => false` pour ne pas confirmer les adresses.
+- **Plusieurs plannings par compte** (menu en haut à gauche). Celui qui crée un planning en est l'admin ;
+  il invite par lien (à usage unique, 14 jours) un parent, l'autre parent ou un proche, comme membre ou comme admin.
+  Chaque membre choisit son rôle dans le planning (l'un des deux parents, ou ni l'un ni l'autre).
+- **Réglages › Planning** : renommer, membres (rôle, e-mail, arrivée, dernière visite, modifications), invitations
+  en attente, nommer ou retirer un admin, retirer un membre, historique, quitter, supprimer (en recopiant son nom).
+- **Réglages › Mon compte** : prénom, notifications par e-mail, mot de passe, export de toutes ses données (JSON),
+  suppression du compte (les plannings dont on est seul membre sont supprimés, ailleurs un autre membre devient admin si besoin).
+- Pages légales : `mentions-legales.html`, `confidentialite.html` (RGPD), `cgu.html`.
+- Premier passage sur une base vide : écran « Bienvenue » avec le code `SETUP_CODE` (compte administrateur
+  du site), le planning de `data.json` est importé. Une base créée avant les plannings multiples est migrée
+  automatiquement (le planning existant devient « Planning de garde », chaque compte en devient membre, l'admin en reste admin).
+- Enregistrement avec numéro de version : si deux personnes modifient en même temps, les changements sont fusionnés.
 - `api/config.php` est généré au déploiement à partir des secrets de l'environnement GitHub
   `FTP_ALTERPLAN_OVH` (`DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `SETUP_CODE`) ; il n'est jamais versionné.
 - Tests de l'API : `tests/api.test.sh` contre `php -S` avec une base SQLite (lancés aussi au déploiement).
