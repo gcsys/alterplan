@@ -75,7 +75,7 @@ function schema(PDO $db, bool $mysql): void
     $db->exec("CREATE TABLE IF NOT EXISTS ap_attempts (ip VARCHAR(64) NOT NULL, at DATETIME NOT NULL)$tail");
     $db->exec("CREATE TABLE IF NOT EXISTS ap_sent (k VARCHAR(190) NOT NULL PRIMARY KEY, at DATETIME NOT NULL)$tail");
     // Colonnes ajoutées après coup (notifications) : ignorées si elles existent déjà.
-    foreach (['email VARCHAR(190) NULL', 'prefs TEXT NULL', 'notified_version INT NULL'] as $col) {
+    foreach (['email VARCHAR(190) NULL', 'prefs TEXT NULL', 'notified_version INT NULL', 'last_seen DATETIME NULL'] as $col) {
         try { $db->exec("ALTER TABLE ap_users ADD COLUMN $col"); } catch (Throwable $e) { /* déjà là */ }
     }
 }
@@ -134,6 +134,9 @@ if ($cookie !== '' && preg_match('/^[a-f0-9]{64}$/', $cookie)) {
     $st = $db->prepare('SELECT u.* FROM ap_sessions s JOIN ap_users u ON u.id = s.user_id WHERE s.token = ? AND s.expires > ?');
     $st->execute([$hash($cookie), $now]);
     $user = $st->fetch() ?: null;
+    if ($user && ($user['last_seen'] ?? '') < gmdate('Y-m-d H:i:s', time() - 600)) {
+        $db->prepare('UPDATE ap_users SET last_seen = ? WHERE id = ?')->execute([$now, $user['id']]);
+    }
 }
 function openSession(PDO $db, int $userId, string $now, bool $https, callable $hash): void
 {
@@ -258,9 +261,30 @@ switch ($action) {
     }
 
     case 'users': {
-        $needUser();
-        $rows = $db->query('SELECT id, login, name, parent, admin FROM ap_users ORDER BY id')->fetchAll();
-        out(['users' => array_map('publicUser', $rows)]);
+        $u = $needUser();
+        $rows = $db->query('SELECT u.*, (SELECT COUNT(*) FROM ap_history h WHERE h.user_id = u.id) AS edits, (SELECT MAX(h.at) FROM ap_history h WHERE h.user_id = u.id) AS last_edit FROM ap_users u ORDER BY u.id')->fetchAll();
+        $users = array_map(function ($r) use ($u) {
+            $x = publicUser($r);
+            if ($u['admin']) $x += ['email' => $r['email'] ?: null, 'created' => $r['created'], 'lastSeen' => $r['last_seen'], 'edits' => (int)$r['edits'], 'lastEdit' => $r['last_edit']];
+            return $x;
+        }, $rows);
+        $res = ['users' => $users];
+        if ($u['admin']) {
+            $st = $db->prepare('SELECT substr(token, 1, 12) AS id, parent, expires FROM ap_invites WHERE used = 0 AND expires > ? ORDER BY expires');
+            $st->execute([$now]);
+            $res['invites'] = $st->fetchAll();
+        }
+        out($res);
+    }
+
+    case 'revoke': {
+        if ($method !== 'POST') fail('POST attendu.', 405);
+        $u = $needUser();
+        if (!$u['admin']) fail("Seul l'administrateur peut annuler une invitation.", 403);
+        $id = (string)($body['id'] ?? '');
+        if (!preg_match('/^[a-f0-9]{12}$/', $id)) fail('Invitation inconnue.');
+        $db->prepare('DELETE FROM ap_invites WHERE used = 0 AND token LIKE ?')->execute([$id . '%']);
+        out(['ok' => true]);
     }
 
     case 'invite': {

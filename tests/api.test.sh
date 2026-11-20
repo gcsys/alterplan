@@ -33,6 +33,13 @@ check "invitation à usage unique" "$(post "$J2" register "{\"token\":\"$TOKEN\"
 check "Maman voit le planning" "$(get "$J2" status)" '"parent":"b"'
 check "Maman ne peut pas inviter" "$(post "$J2" invite '{}')" 'administrateur'
 check "liste des comptes" "$(get "$J1" users)" '"maman"'
+check "admin : dernière visite" "$(get "$J1" users)" '"lastSeen"'
+check "parent : pas les détails" "$(get "$J2" users | grep -c lastSeen)" '^0$'
+INV2=$(post "$J1" invite '{"parent":"a"}')
+check "invitation en attente listée" "$(get "$J1" users)" '"invites":\[{"id"'
+RID=$(get "$J1" users | sed -E 's/.*"invites":\[\{"id":"([a-f0-9]+)".*/\1/')
+check "annulation d'invitation" "$(post "$J1" revoke "{\"id\":\"$RID\"}")" '"ok":true'
+check "invitation annulée" "$(get "$J1" users)" '"invites":\[\]'
 check "historique" "$(get "$J1" history)" 'Noël'
 check "déconnexion" "$(post "$J2" logout '{}')" '"ok":true'
 check "déconnecté" "$(get "$J2" status)" '"user":null'

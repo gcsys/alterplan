@@ -1093,10 +1093,32 @@
     }, { once: false });
     try {
       const j = await S.Api.get("users");
-      $("#acc-users").innerHTML = `<p class="small muted">Comptes</p><ul>${j.users.map((x) => `<li>${x.parent ? pill(x.parent, x.name) : `<span class="who"><i></i>${esc(x.name)}</span>`} <span class="muted small">${esc(x.login)}${x.admin ? " · admin" : ""}</span>
-        ${u.admin && x.id !== u.id ? `<button type="button" class="link-btn small" data-del="${x.id}">Supprimer</button>` : ""}</li>`).join("")}</ul>`;
+      const tm = (t) => new Date(t.replace(" ", "T") + "Z");
+      const day = (t) => tm(t).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+      const ago = (t) => {
+        if (!t) return "jamais";
+        const m = Math.round((Date.now() - tm(t)) / 60000);
+        if (m < 15) return "à l'instant";
+        if (m < 60) return `il y a ${m} min`;
+        if (m < 1440) return `il y a ${Math.round(m / 60)} h`;
+        const d = Math.round(m / 1440);
+        return d < 60 ? `il y a ${d} j` : `le ${day(t)}`;
+      };
+      const role = (x) => x.parent ? pill(x.parent, x.name) : `<span class="who"><i></i>${esc(x.name)}</span>`;
+      const members = j.users.map((x) => `<li>
+        <div class="m-head">${role(x)} <span class="muted small">${esc(x.login)}${x.admin ? " · admin" : ""}${!x.parent && !x.admin ? " · sans rôle" : ""}</span>
+        ${u.admin && x.id !== u.id ? `<button type="button" class="link-btn small" data-del="${x.id}">Retirer</button>` : ""}</div>
+        ${u.admin ? `<div class="m-meta muted small">${x.email ? esc(x.email) : "pas d'e-mail"} · inscrit le ${day(x.created)} · vu ${ago(x.lastSeen)} · ${x.edits ? `${x.edits} modification${x.edits > 1 ? "s" : ""}, dernière ${ago(x.lastEdit)}` : "aucune modification"}</div>` : ""}
+      </li>`).join("");
+      const inv = (j.invites || []).map((i) => `<li><div class="m-head"><span class="muted small">Invitation ${i.parent ? `côté ${esc(st.data.parents[i.parent].name)}` : "sans rôle"} · expire le ${day(i.expires)}</span>
+        <button type="button" class="link-btn small" data-revoke="${i.id}">Annuler</button></div></li>`).join("");
+      $("#acc-users").innerHTML = `<p class="small muted">Membres du planning (${j.users.length})</p><ul class="members">${members}</ul>
+        ${inv ? `<p class="small muted">Invitations en attente</p><ul class="members">${inv}</ul>` : ""}`;
+      $$("[data-revoke]", sec).forEach((b) => (b.onclick = async () => {
+        try { await S.Api.post("revoke", { id: b.dataset.revoke }); renderAccount(); } catch (e) { toast(e.message); }
+      }));
       $$("[data-del]", sec).forEach((b) => (b.onclick = async () => {
-        if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Confirmer la suppression"; return; }
+        if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Confirmer le retrait"; return; }
         try { await S.Api.post("deluser", { id: Number(b.dataset.del) }); renderAccount(); } catch (e) { toast(e.message); }
       }));
     } catch (e) {

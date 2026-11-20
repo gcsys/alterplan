@@ -425,6 +425,11 @@ body.locked #me-btn, body.locked #settings-btn { display: none; }
 .acc-me { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .acc-users ul, .acc-hist ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; font-size: .9rem; }
 .acc-users li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acc-users .members { gap: 8px; margin-bottom: 10px; }
+.acc-users .members li { display: block; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.members .m-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.members .m-head .link-btn { margin-left: auto; }
+.members .m-meta { margin-top: 4px; line-height: 1.45; }
 .acc-invite { display: grid; gap: 8px; }
 .acc-notif summary { cursor: pointer; font-weight: 600; font-size: .88rem; }
 .notif-form { display: grid; gap: 10px; margin-top: 10px; }
