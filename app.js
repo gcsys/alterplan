@@ -71,6 +71,7 @@
       }
       setSync("ok");
     } catch (e) {
+      if (e.status === 401) { st.pending = []; setSync("error", "Session expirée, reconnecte-toi."); return showAuth(); }
       setSync("error", e.message);
     } finally {
       st.saving = false;
@@ -100,6 +101,7 @@
     });
   }
   function askEdit() {
+    if (S.backend === "api") return showAuth("login");
     toast("Lecture seule sur cet appareil. Ajoute un jeton GitHub pour modifier.", { label: "Réglages", fn: () => openSettings("sec-share") });
   }
 
@@ -492,6 +494,7 @@
   }
   function openSettings(section) {
     renderSettings();
+    renderAccount();
     dlgSet.showModal();
     if (section) document.getElementById(section)?.scrollIntoView({ block: "start" });
   }
@@ -825,6 +828,14 @@
 
   /* ===== Démarrage ===== */
   async function connect() {
+    if (S.backend === "api") {
+      const u = S.status && S.status.user;
+      st.mode = u ? "remote" : "readonly";
+      st.reason = "";
+      setSync(u ? "ok" : "readonly");
+      render();
+      return;
+    }
     if (S.token()) {
       const r = await S.check();
       st.mode = r.ok ? "remote" : local ? "local" : "readonly";
@@ -853,6 +864,12 @@
     $("#repo-link").href = `https://github.com/${S.repo}`;
     render();
     setSync("loading");
+    const api = await S.detect();
+    if (api) {
+      $("#foot-txt").textContent = "alterplan · planning partagé, privé, enregistré sur cet hébergement.";
+      if (!api.user) return showAuth();
+      return startApi();
+    }
     const { data, source } = await S.load();
     if (data && !(local && S.cached() && source !== "github")) st.data = P.clean(data);
     else if (local && S.cached()) st.data = P.clean(S.cached());
@@ -866,5 +883,176 @@
       if (r.data && !st.pending.length) { st.data = P.clean(r.data); render(); }
     });
   }
+  /* ===== Mode comptes (API PHP) ===== */
+  let watching = false;
+  async function startApi() {
+    hideAuth();
+    const u = S.status.user;
+    if (S.status.data) st.data = P.clean(S.status.data);
+    if (!st.me && u.parent) { st.me = u.parent; LS.set("alterplan.me", st.me); }
+    await connect();
+    if (!st.me) setTimeout(() => $("#me-btn").click(), 400);
+    if (watching) return;
+    watching = true;
+    document.addEventListener("visibilitychange", async () => {
+      if (document.visibilityState !== "visible" || st.pending.length || st.saving) return;
+      const r = await S.load();
+      if (r.source === "auth") return showAuth();
+      if (r.data && !st.pending.length) { st.data = P.clean(r.data); render(); }
+    });
+  }
+  function hideAuth() {
+    $("#auth").hidden = true;
+    $("#main").hidden = false;
+    document.body.classList.remove("locked");
+  }
+  const inviteToken = () => new URLSearchParams(location.search).get("invitation") || "";
+  async function showAuth(view) {
+    $("#main").hidden = true;
+    document.body.classList.add("locked");
+    setSync("");
+    const box = $("#auth");
+    box.hidden = false;
+    const token = inviteToken();
+    let info = null;
+    if (!view) {
+      if (S.status && S.status.needsSetup) view = "setup";
+      else if (token) {
+        info = await S.Api.get("inviteinfo", `&token=${encodeURIComponent(token)}`).catch(() => ({ valid: false }));
+        view = info.valid ? "register" : "login";
+      } else view = "login";
+    }
+    const parentPick = (sel) => `<div class="who-pick" data-field="parent" role="radiogroup" aria-label="Tu es">
+        <button type="button" data-w="a" class="wp-a${sel === "a" ? " on" : ""}">${esc(name("a"))}</button>
+        <button type="button" data-w="b" class="wp-b${sel === "b" ? " on" : ""}">${esc(name("b"))}</button></div>`;
+    const forms = {
+      login: `<h1>Connexion</h1><p class="muted">Le planning est privé : connecte-toi pour le voir et le modifier.</p>
+        ${token ? `<p class="err">Ce lien d'invitation n'est plus valable. Demande-en un nouveau.</p>` : ""}
+        <label>Identifiant<input type="text" name="login" autocomplete="username" autocapitalize="none" required></label>
+        <label>Mot de passe<input name="password" type="password" autocomplete="current-password" required></label>
+        <button class="btn primary" type="submit">Se connecter</button>`,
+      setup: `<h1>Bienvenue</h1><p class="muted">Première connexion : crée ton compte administrateur. Le planning actuel sera importé.</p>
+        <label>Code d'installation<input name="code" type="password" autocomplete="off" required><small>Le secret SETUP_CODE mis dans GitHub.</small></label>
+        <label>Ton prénom<input type="text" name="name" autocomplete="given-name" required></label>
+        <span class="lbl">Tu es</span>${parentPick("a")}
+        <label>Identifiant<input type="text" name="login" autocomplete="username" autocapitalize="none" required></label>
+        <label>Mot de passe<input name="password" type="password" autocomplete="new-password" minlength="8" required><small>8 caractères minimum.</small></label>
+        <button class="btn primary" type="submit">Créer mon compte</button>`,
+      register: `<h1>Invitation</h1><p class="muted">${esc(info && info.from ? info.from : "L'autre parent")} t'invite à partager le planning de garde.</p>
+        <label>Ton prénom<input type="text" name="name" autocomplete="given-name" required></label>
+        <span class="lbl">Tu es</span>${parentPick(info && info.parent ? info.parent : "b")}
+        <label>Identifiant<input type="text" name="login" autocomplete="username" autocapitalize="none" required></label>
+        <label>Mot de passe<input name="password" type="password" autocomplete="new-password" minlength="8" required><small>8 caractères minimum.</small></label>
+        <button class="btn primary" type="submit">Créer mon compte</button>`,
+    };
+    box.innerHTML = `<form class="card auth-card" data-view="${view}" novalidate>
+        <span class="brand-mark big" aria-hidden="true"><i></i><i></i></span>
+        ${forms[view]}
+        <p class="auth-err err" role="alert"></p>
+      </form>`;
+    const form = box.querySelector("form");
+    form.addEventListener("click", (e) => {
+      const b = e.target.closest(".who-pick button");
+      if (!b) return;
+      $$(".who-pick button", form).forEach((x) => x.classList.toggle("on", x === b));
+    });
+    form.querySelector("input").focus();
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(form));
+      const picked = form.querySelector(".who-pick button.on");
+      if (picked) f.parent = picked.dataset.w;
+      const btn = form.querySelector("button[type=submit]");
+      btn.disabled = true;
+      try {
+        if (view === "login") await S.Api.post("login", { login: f.login, password: f.password });
+        else if (view === "setup") await S.Api.post("setup", f);
+        else await S.Api.post("register", { ...f, token });
+        if (token) history.replaceState(null, "", location.pathname);
+        if (f.parent && view !== "login") { st.me = f.parent; LS.set("alterplan.me", st.me); }
+        await S.detect();
+        if (!S.status || !S.status.user) throw new Error("Connexion impossible.");
+        startApi();
+        if (view !== "login") toast(view === "setup" ? "Compte créé, planning importé." : "Bienvenue !");
+      } catch (err) {
+        form.querySelector(".auth-err").textContent = err.message;
+        btn.disabled = false;
+      }
+    });
+  }
+
+  /* Réglages › Compte (mode comptes) */
+  async function renderAccount() {
+    const sec = $("#sec-account");
+    const api = S.backend === "api" && S.status && S.status.user;
+    sec.hidden = !api;
+    $("#sec-share").hidden = !!api;
+    if (!api) return;
+    const u = S.status.user;
+    sec.innerHTML = `<h3>Compte</h3>
+      <div class="acc-me"><p>Connecté : <strong>${esc(u.name)}</strong> <span class="muted">(${esc(u.login)})</span></p>
+        <button type="button" class="btn small" id="acc-logout">Se déconnecter</button></div>
+      <div class="acc-users" id="acc-users"><p class="muted small">Chargement des comptes…</p></div>
+      ${u.admin ? `<div class="acc-invite">
+        <p class="small">Inviter l'autre parent : un lien à usage unique, valable 14 jours.</p>
+        <div class="row-btns"><button type="button" class="btn small" data-inv="b">Inviter ${esc(name("b"))}</button><button type="button" class="btn small" data-inv="a">Inviter ${esc(name("a"))}</button></div>
+        <div class="inv-out" id="inv-out" hidden><input readonly id="inv-link" aria-label="Lien d'invitation"><button type="button" class="btn small primary" id="inv-copy">Copier</button></div>
+      </div>` : ""}
+      <details class="acc-pass"><summary>Changer de mot de passe</summary>
+        <form id="acc-pass" class="token-row">
+          <input type="password" name="old" placeholder="Actuel" autocomplete="current-password" required>
+          <input type="password" name="new" placeholder="Nouveau (8 car. min.)" autocomplete="new-password" minlength="8" required>
+          <button class="btn small primary">Changer</button>
+        </form></details>
+      <details class="acc-hist" id="acc-hist"><summary>Dernières modifications</summary><ul id="hist-list"></ul></details>`;
+    $("#acc-logout").onclick = async () => {
+      await S.Api.post("logout").catch(() => {});
+      S.status = { ...S.status, user: null };
+      LS.set("alterplan.cache", null);
+      dlgSet.close();
+      showAuth("login");
+    };
+    $$("[data-inv]", sec).forEach((b) => (b.onclick = async () => {
+      try {
+        const j = await S.Api.post("invite", { parent: b.dataset.inv });
+        const url = `${location.origin}${location.pathname}?invitation=${j.token}`;
+        $("#inv-out").hidden = false;
+        $("#inv-link").value = url;
+        $("#inv-link").select();
+      } catch (e) { toast(e.message); }
+    }));
+    const copy = $("#inv-copy");
+    if (copy) copy.onclick = async () => {
+      const url = $("#inv-link").value;
+      if (navigator.share) { try { await navigator.share({ title: "alterplan", text: "Invitation au planning de garde", url }); return; } catch (e) { /* annulé */ } }
+      try { await navigator.clipboard.writeText(url); toast("Lien copié."); } catch (e) { $("#inv-link").select(); }
+    };
+    $("#acc-pass").onsubmit = async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(e.target));
+      try { await S.Api.post("password", f); e.target.reset(); toast("Mot de passe changé. Les autres appareils sont déconnectés."); }
+      catch (err) { toast(err.message); }
+    };
+    $("#acc-hist").addEventListener("toggle", async (e) => {
+      if (!e.target.open) return;
+      const j = await S.Api.get("history").catch(() => ({ history: [] }));
+      $("#hist-list").innerHTML = j.history.map((h) => {
+        const d = new Date(h.at.replace(" ", "T") + "Z");
+        return `<li><span class="muted">${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span> <strong>${esc(h.name || "?")}</strong> · ${esc(h.message)}</li>`;
+      }).join("") || `<li class="muted">Rien pour l'instant.</li>`;
+    }, { once: false });
+    try {
+      const j = await S.Api.get("users");
+      $("#acc-users").innerHTML = `<p class="small muted">Comptes</p><ul>${j.users.map((x) => `<li>${x.parent ? pill(x.parent, x.name) : `<span class="who"><i></i>${esc(x.name)}</span>`} <span class="muted small">${esc(x.login)}${x.admin ? " · admin" : ""}</span>
+        ${u.admin && x.id !== u.id ? `<button type="button" class="link-btn small" data-del="${x.id}">Supprimer</button>` : ""}</li>`).join("")}</ul>`;
+      $$("[data-del]", sec).forEach((b) => (b.onclick = async () => {
+        if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Confirmer la suppression"; return; }
+        try { await S.Api.post("deluser", { id: Number(b.dataset.del) }); renderAccount(); } catch (e) { toast(e.message); }
+      }));
+    } catch (e) {
+      $("#acc-users").innerHTML = "";
+    }
+  }
+
   init();
 })();

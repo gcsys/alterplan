@@ -1,0 +1,5 @@
+# Seul index.php est accessible ; la configuration et l'état du serveur restent privés.
+Options -Indexes
+<FilesMatch "^(config\.php|.*\.sqlite|.*\.db)$">
+  Require all denied
+</FilesMatch>

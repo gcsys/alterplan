@@ -1,5 +1,7 @@
-/* alterplan · stockage partagé.
- * Le planning vit dans data.json, à la racine du repo GitHub qui héberge le site.
+/* alterplan · stockage partagé. Deux modes :
+ *   - « api » (alterplan.quiquandou.fr) : API PHP + MySQL sur l'hébergement OVH, comptes des parents ;
+ *   - « github » (copie GitHub Pages, ou tant que la base n'est pas configurée) : data.json du repo.
+ * Mode github :
  *   - lecture : API GitHub (toujours à jour), sinon data.json servi par GitHub Pages ;
  *   - écriture : API GitHub avec un jeton personnel, gardé dans ce navigateur uniquement.
  * Une copie locale permet d'afficher le planning tout de suite et hors connexion. */
@@ -34,7 +36,45 @@
   };
   const b64decode = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
 
+  /* ===== API PHP (même domaine) ===== */
+  async function call(a, body, query = "") {
+    const r = await fetch(`api/index.php?a=${a}${query}`, body === undefined
+      ? { credentials: "same-origin", cache: "no-store" }
+      : { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json", "X-Alterplan": "1" }, body: JSON.stringify(body) });
+    let j = null;
+    try { j = await r.json(); } catch (e) { /* pas du JSON : pas d'API ici */ }
+    if (!j) { const e = new Error("API indisponible"); e.status = r.status; e.code = "noapi"; throw e; }
+    j.status = r.status;
+    return j;
+  }
+  const fail = (j) => { const e = new Error(j.error || `Erreur ${j.status}`); e.status = j.status; e.code = j.code; throw e; };
+  const Api = {
+    call,
+    async post(a, body = {}) { const j = await call(a, body); if (j.error) fail(j); return j; },
+    async get(a, query = "") { const j = await call(a, undefined, query); if (j.error) fail(j); return j; },
+  };
+
   const S = {
+    backend: "github", // devient "api" si l'API PHP répond
+    status: null,
+    version: 0,
+    Api,
+    /* Choisit le mode. -> statut de l'API ou null (mode github). */
+    async detect() {
+      const h = (root.location && root.location.hostname) || "";
+      if (root.location.protocol === "file:" || /\.github\.io$/i.test(h)) return null;
+      try {
+        const j = await call("status");
+        if (j.error || !("needsSetup" in j)) return null; // API absente ou base pas encore configurée
+        S.backend = "api";
+        S.status = j;
+        if (j.user) S.version = j.version || 0;
+        return j;
+      } catch (e) {
+        return null;
+      }
+    },
+
     repo: guessRepo(),
     sha: null,
     token: () => LS.get(K.token) || "",
@@ -54,6 +94,19 @@
 
     /* -> {data, source: "github" | "pages" | "cache" | "defaut"} */
     async load() {
+      if (S.backend === "api") {
+        try {
+          const j = await call("status");
+          S.status = j;
+          if (!j.user) return { data: null, source: "auth" };
+          S.version = j.version || 0;
+          if (j.data) S.cache(j.data);
+          return { data: j.data, source: "api" };
+        } catch (e) {
+          const c = S.cached();
+          return c ? { data: c, source: "cache" } : { data: null, source: "defaut" };
+        }
+      }
       try {
         const r = await fetch(S.api(`/contents/${PATH}?ref=${BRANCH}&t=${Date.now()}`), { headers: S.headers(), cache: "no-store" });
         if (r.ok) {
@@ -81,6 +134,7 @@
 
     /* Le jeton peut-il écrire dans le repo ? -> {ok, reason} */
     async check() {
+      if (S.backend === "api") return S.status && S.status.user ? { ok: true } : { ok: false, reason: "Non connecté." };
       if (!S.token()) return { ok: false, reason: "Aucun jeton." };
       try {
         const r = await fetch(S.api(""), { headers: S.headers(), cache: "no-store" });
@@ -98,6 +152,20 @@
     /* Enregistre data.json (un commit). Si l'autre parent a enregistré entre-temps, `rebase`
      * reçoit sa version et rend la version à écrire (ses changements + les nôtres). */
     async save(data, message = "Mise à jour du planning", rebase = null) {
+      if (S.backend === "api") {
+        for (let attempt = 0; attempt < 4; attempt++) {
+          S.cache(data);
+          const j = await call("save", { data, version: S.version, message });
+          if (j.ok) { S.version = j.version; return data; }
+          if (j.code === "conflict") {
+            S.version = j.version;
+            if (rebase) data = rebase(j.data || {});
+            continue;
+          }
+          fail(j);
+        }
+        throw new Error("Conflit d'enregistrement, réessaie.");
+      }
       for (let attempt = 0; attempt < 3; attempt++) {
         S.cache(data);
         const r = await fetch(S.api(`/contents/${PATH}`), {

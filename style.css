@@ -409,6 +409,29 @@ code { font-size: .85em; background: var(--surface-3); padding: 1px 5px; border-
 .theme-seg button { display: inline-flex; align-items: center; gap: 6px; }
 .theme-seg button svg { width: 16px; height: 16px; }
 
+/* ===== Connexion ===== */
+.auth { min-height: calc(100dvh - 64px); display: grid; place-items: center; padding-top: 24px; padding-bottom: 48px; }
+.auth-card { width: min(420px, 100%); display: grid; gap: 12px; padding: 28px 24px; }
+.auth-card h1 { font-family: var(--font-display); font-size: 2rem; font-weight: 700; }
+.auth-card p { margin: 0; }
+.auth-card label { display: grid; gap: 4px; font-size: .82rem; font-weight: 600; color: var(--text-2); }
+.auth-card label small { font-weight: 400; color: var(--muted); }
+.auth-card input { min-height: 44px; font-size: 1rem; }
+.auth-card .lbl { font-size: .82rem; font-weight: 600; color: var(--text-2); margin-bottom: -6px; }
+.auth-card .btn.primary { min-height: 46px; margin-top: 4px; }
+.auth-err:empty { display: none; }
+.brand-mark.big { width: 44px; height: 44px; }
+body.locked #me-btn, body.locked #settings-btn { display: none; }
+.acc-me { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.acc-users ul, .acc-hist ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; font-size: .9rem; }
+.acc-users li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acc-invite { display: grid; gap: 8px; }
+.inv-out { display: flex; gap: 6px; }
+.inv-out input { flex: 1; font-size: .8rem; }
+.acc-pass summary, .acc-hist summary { cursor: pointer; font-weight: 600; font-size: .88rem; }
+.acc-pass form { margin-top: 8px; }
+.acc-hist ul { margin-top: 8px; font-size: .84rem; max-height: 260px; overflow: auto; }
+
 .foot { text-align: center; color: var(--muted); font-size: .8rem; padding-top: 8px; }
 .foot p { margin: 0; }
 

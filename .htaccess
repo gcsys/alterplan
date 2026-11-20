@@ -25,3 +25,9 @@ Options -Indexes
 </IfModule>
 
 AddType application/manifest+json .webmanifest
+
+# Le planning est dans la base de données : l'ancien data.json n'est plus servi publiquement
+# (l'API le lit directement sur le disque pour l'import initial).
+<Files "data.json">
+  Require all denied
+</Files>

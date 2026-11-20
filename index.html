@@ -36,7 +36,10 @@
     </div>
   </header>
 
-  <main class="wrap">
+  <!-- Connexion (mode comptes) -->
+  <section id="auth" class="auth wrap" hidden aria-live="polite"></section>
+
+  <main class="wrap" id="main">
     <!-- Maintenant -->
     <section class="card now" id="now" aria-live="polite"></section>
 
@@ -139,7 +142,7 @@
     </div>
 
     <footer class="foot">
-      <p>alterplan · planning partagé, enregistré dans <a id="repo-link" href="#" target="_blank" rel="noopener">le repo GitHub</a>.</p>
+      <p id="foot-txt">alterplan · planning partagé, enregistré dans <a id="repo-link" href="#" target="_blank" rel="noopener">le repo GitHub</a>.</p>
     </footer>
   </main>
 
@@ -160,6 +163,8 @@
         <h2 id="dlg-set-h">Réglages</h2>
         <button type="button" class="icon-btn" data-close aria-label="Fermer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       </div>
+
+      <section class="set-sec" id="sec-account" hidden></section>
 
       <section class="set-sec">
         <h3>Apparence</h3>
