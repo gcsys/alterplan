@@ -889,9 +889,8 @@
     hideAuth();
     const u = S.status.user;
     if (S.status.data) st.data = P.clean(S.status.data);
-    if (!st.me && u.parent) { st.me = u.parent; LS.set("alterplan.me", st.me); }
+    if (!st.me) { st.me = u.parent || "none"; LS.set("alterplan.me", st.me); } // l'admin regarde sans être un parent
     await connect();
-    if (!st.me) setTimeout(() => $("#me-btn").click(), 400);
     if (watching) return;
     watching = true;
     document.addEventListener("visibilitychange", async () => {
@@ -931,14 +930,13 @@
         <label>Identifiant<input type="text" name="login" autocomplete="username" autocapitalize="none" required></label>
         <label>Mot de passe<input name="password" type="password" autocomplete="current-password" required></label>
         <button class="btn primary" type="submit">Se connecter</button>`,
-      setup: `<h1>Bienvenue</h1><p class="muted">Première connexion : crée ton compte administrateur. Le planning actuel sera importé.</p>
-        <label>Code d'installation<input name="code" type="password" autocomplete="off" required><small>Le secret SETUP_CODE mis dans GitHub.</small></label>
+      setup: `<h1>Bienvenue</h1><p class="muted">Première connexion : crée le compte administrateur. Il gère les comptes (invitations des parents) sans être Papa ni Maman. Le planning actuel sera importé.</p>
+        <label>Code d'installation<input name="code" type="password" autocomplete="off" required><small>Le secret SETUP_CODE mis dans GitHub. Les parents n'en ont pas besoin : ils reçoivent un lien d'invitation.</small></label>
         <label>Ton prénom<input type="text" name="name" autocomplete="given-name" required></label>
-        <span class="lbl">Tu es</span>${parentPick("a")}
         <label>Identifiant<input type="text" name="login" autocomplete="username" autocapitalize="none" required></label>
         <label>Mot de passe<input name="password" type="password" autocomplete="new-password" minlength="8" required><small>8 caractères minimum.</small></label>
         <button class="btn primary" type="submit">Créer mon compte</button>`,
-      register: `<h1>Invitation</h1><p class="muted">${esc(info && info.from ? info.from : "L'autre parent")} t'invite à partager le planning de garde.</p>
+      register: `<h1>Invitation</h1><p class="muted">${esc(info && info.from ? info.from : "On")} t'invite à partager le planning de garde des enfants.</p>
         <label>Ton prénom<input type="text" name="name" autocomplete="given-name" required></label>
         <span class="lbl">Tu es</span>${parentPick(info && info.parent ? info.parent : "b")}
         <label>Identifiant<input type="text" name="login" autocomplete="username" autocapitalize="none" required></label>
@@ -992,9 +990,13 @@
     sec.innerHTML = `<h3>Compte</h3>
       <div class="acc-me"><p>Connecté : <strong>${esc(u.name)}</strong> <span class="muted">(${esc(u.login)})</span></p>
         <button type="button" class="btn small" id="acc-logout">Se déconnecter</button></div>
+      <div class="acc-role"><span class="small muted">Je suis</span>
+        <div class="seg" id="acc-parent" role="radiogroup" aria-label="Mon rôle">
+          ${[["a", name("a")], ["b", name("b")], ["", u.admin ? "Admin seulement" : "Aucun"]].map(([v, l]) => `<button type="button" role="radio" data-p="${v}" class="${(u.parent || "") === v ? "active" : ""}" aria-checked="${(u.parent || "") === v}">${esc(l)}</button>`).join("")}
+        </div></div>
       <div class="acc-users" id="acc-users"><p class="muted small">Chargement des comptes…</p></div>
       ${u.admin ? `<div class="acc-invite">
-        <p class="small">Inviter l'autre parent : un lien à usage unique, valable 14 jours.</p>
+        <p class="small">Inviter un parent : un lien à usage unique, valable 14 jours, à lui envoyer.</p>
         <div class="row-btns"><button type="button" class="btn small" data-inv="b">Inviter ${esc(name("b"))}</button><button type="button" class="btn small" data-inv="a">Inviter ${esc(name("a"))}</button></div>
         <div class="inv-out" id="inv-out" hidden><input readonly id="inv-link" aria-label="Lien d'invitation"><button type="button" class="btn small primary" id="inv-copy">Copier</button></div>
       </div>` : ""}
@@ -1005,6 +1007,18 @@
           <button class="btn small primary">Changer</button>
         </form></details>
       <details class="acc-hist" id="acc-hist"><summary>Dernières modifications</summary><ul id="hist-list"></ul></details>`;
+    $("#acc-parent").onclick = async (e) => {
+      const b = e.target.closest("button[data-p]");
+      if (!b) return;
+      try {
+        await S.Api.post("profile", { name: u.name, parent: b.dataset.p || null });
+        S.status.user = { ...u, parent: b.dataset.p || null };
+        st.me = b.dataset.p || "none";
+        LS.set("alterplan.me", st.me);
+        render();
+        renderAccount();
+      } catch (err) { toast(err.message); }
+    };
     $("#acc-logout").onclick = async () => {
       await S.Api.post("logout").catch(() => {});
       S.status = { ...S.status, user: null };
